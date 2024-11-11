@@ -33,7 +33,7 @@ export class RedisKafkaManager {
 
             await this.consumer.run({
                 eachMessage: async ({ message }) => {
-                    console.log(message.key, message.value?.toString())
+                    console.log(message, message.key, message.value?.toString())
                     if (!message.key || !message.value) return;
 
                     const correlationId = message.key.toString();
@@ -91,7 +91,7 @@ export class RedisKafkaManager {
             });
 
             try {
-                await this.queue.lPush(request.type, JSON.stringify({
+                await this.queue.lPush('requests', JSON.stringify({
                     ...request,
                     correlationId
                 }));

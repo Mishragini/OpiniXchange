@@ -81,7 +81,18 @@ type createMarketReq = {
         symbol: string,
         endTime: Date,
         description: string,
-        sourceOfTruth: string
+        sourceOfTruth: string,
+        categoryTitle: string
+    }
+}
+
+type createCategoryReq = {
+    type: 'create_category',
+    payload: {
+        token: string,
+        title: string,
+        icon: string,
+        description: string
     }
 }
 
@@ -95,4 +106,4 @@ type mintReq = {
     }
 }
 
-export type RequestPayload = signUpReq | loginReq | getMarketReq | getMarketsReq | buyReq | sellReq | getOrderbookReq | mintReq | createMarketReq | onrampInrReq;
+export type RequestPayload = signUpReq | loginReq | getMarketReq | getMarketsReq | buyReq | sellReq | getOrderbookReq | mintReq | createMarketReq | onrampInrReq | createCategoryReq;

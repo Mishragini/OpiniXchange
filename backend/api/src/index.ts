@@ -1,7 +1,7 @@
 import express from 'express'
 import { RedisKafkaManager } from './redisKafkaManager';
 import { user_router } from './routers/user';
-import { admin_roter } from './routers/admin';
+import { admin_router } from './routers/admin';
 
 const app = express();
 app.use(express.json());
@@ -48,7 +48,7 @@ app.get("/markets", async (req, res) => {
         res.json(403).json({ message: "Unauthorized" })
         return
     }
-    const responseFromEngine = RedisKafkaManager.getInstance().sendAndAwait({
+    const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'get_all_markets',
         payload: {
             token
@@ -57,7 +57,7 @@ app.get("/markets", async (req, res) => {
     res.json(responseFromEngine)
 })
 
-app.get("market/:marketSymbol", async (req, res) => {
+app.get("/market/:marketSymbol", async (req, res) => {
     const token = req.headers["authorization"]?.split(' ')[1];
     const marketSymbol = req.params.marketSymbol;
 
@@ -94,7 +94,7 @@ app.get('/orderbook/:symbol', async (req, res) => {
 })
 
 app.use("/user", user_router)
-app.use("/admin", admin_roter)
+app.use("/admin", admin_router)
 
 
 const PORT = 3000
