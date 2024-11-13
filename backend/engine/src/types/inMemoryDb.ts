@@ -1,3 +1,28 @@
+export interface Order {
+    id: string;
+    userId: string;
+    marketSymbol: string;
+    side: Side;
+    quantity: number;
+    remainingQty: number;
+    price: number;
+    status: OrderStatus;
+    timestamp: Date;
+}
+
+export interface Orderbook {
+    [price: number]: {
+        quantity: number
+    }
+}
+
+export enum OrderStatus {
+    PENDING = "pending",
+    FILLED = "filled",
+    PARTIALLY_FILLED = "partially_filled",
+    CANCELLED = "cancelled"
+}
+
 export interface User {
     id: string,
     username: string,

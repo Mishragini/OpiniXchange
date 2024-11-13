@@ -1,5 +1,5 @@
 import { KafkaManager } from "./kafkaManager";
-import { Category, Market, MarketStatus, User } from "./types/inMemoryDb";
+import { Category, Market, MarketStatus, Order, Orderbook, OrderStatus, Side, User } from "./types/inMemoryDb";
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt'
 import * as jwt from 'jsonwebtoken'
@@ -8,14 +8,18 @@ const secretKey = process.env.JWT_SECRET || "secretKey"
 
 export class Engine {
     private static instance: Engine
-    private usesrMap: Map<string, User>
+    private usersMap: Map<string, User>
     private marketsMap: Map<string, Market>
     private categoriesMap: Map<string, Category>
+    private buyOrders: Map<string, Order[]>;
+    private sellOrders: Map<string, Order[]>;
 
     private constructor() {
-        this.usesrMap = new Map()
+        this.usersMap = new Map()
         this.marketsMap = new Map()
         this.categoriesMap = new Map()
+        this.buyOrders = new Map()
+        this.sellOrders = new Map()
     }
 
     public static getInstance() {
@@ -26,7 +30,7 @@ export class Engine {
     }
 
     private findUserByEmail(email: string): User | null {
-        for (const user of this.usesrMap.values()) {
+        for (const user of this.usersMap.values()) {
             if (user.email === email) {
                 return user;
             }
@@ -35,7 +39,7 @@ export class Engine {
     }
 
     private findUserByUsername(username: string): User | null {
-        for (const user of this.usesrMap.values()) {
+        for (const user of this.usersMap.values()) {
             if (user.username === username) {
                 return user;
             }
@@ -49,7 +53,7 @@ export class Engine {
                 throw new Error('Invalid token: missing user ID');
             }
 
-            const user = this.usesrMap.get(decoded.userId);
+            const user = this.usersMap.get(decoded.userId);
             if (!user) {
                 throw new Error('User not found');
             }
@@ -87,7 +91,23 @@ export class Engine {
                     await this.handleCreateMarket(request);
                     break;
                 case 'create_category':
-                    await this.handleCreateCategory(request)
+                    await this.handleCreateCategory(request);
+                    break;
+                case 'onramp_inr':
+                    await this.handleOnrampInr(request);
+                    break;
+                case 'buy':
+                    await this.handleBuy(request);
+                    break;
+                case 'sell':
+                    await this.handleSell(request);
+                    break;
+                case 'get_orderbook':
+                    await this.handleGetOrderbook(request);
+                    break;
+                case 'mint':
+                    await this.handleMint(request);
+                    break;
                 default:
                     throw new Error(`Unsupported request type: ${(request as any).type}`);
             }
@@ -98,13 +118,517 @@ export class Engine {
         }
     }
 
+
+    private async handleMint(request: any) {
+        const { correlationId } = request;
+        const { token, symbol, quantity, price } = request.payload;
+        const priceInPaise = price * 100
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const user = this.usersMap.get(userId);
+            if (!user) {
+                throw new Error('User not found in the database.')
+            }
+            if (user.role !== "admin") {
+                throw new Error("Only admins can mint tokens");
+
+            }
+            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.active);
+            if (!market) {
+                throw new Error(`Active market with symbol ${symbol} does not exist`);
+
+            }
+            const userBalance = user.balance.INR.available!;
+            if (userBalance < 2 * quantity * priceInPaise) {
+                throw new Error("Insufficient INR balance");
+            }
+            user.balance.INR.available -= priceInPaise * 2;
+            user.balance.INR.locked += priceInPaise * 2;
+
+            if (!user.balance.stocks[symbol]) {
+                user.balance.stocks[symbol] = {
+                    yes: { quantity: 0, locked: 0 },
+                    no: { quantity: 0, locked: 0 }
+                };
+            }
+            user.balance.stocks[symbol].yes!.quantity += quantity;
+            user.balance.stocks[symbol].no!.quantity += quantity;
+            user.balance.INR.locked = 0;
+
+            const responsePayload = {
+                type: 'mint_response',
+                data: {
+                    success: true,
+                    data: {
+                        message: `Minted ${quantity} yes and ${quantity} no tokens of ${symbol} to ${userId}`
+                    }
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occured'
+            const responsePayload = {
+                type: 'mint_response',
+                data: {
+                    success: false,
+                    data: {
+                        message: `Minted failed`,
+                        error: errorMessage
+                    }
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        }
+    }
+
+    private async handleGetOrderbook(request: any) {
+        const { correlationId } = request;
+        const { token, symbol } = request.payload;
+
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.active);
+            if (!market) {
+                throw new Error(`Active market ${symbol} not found`);
+            }
+
+            const sellOrders = this.sellOrders.get(symbol) || [];
+
+            const yesOrders = sellOrders.filter(order => order.side === Side.yes);
+            const noOrders = sellOrders.filter(order => order.side === Side.no);
+
+            const yesOrderBook: Orderbook = {};
+            const noOrderBook: Orderbook = {};
+
+            for (const order of yesOrders) {
+                const price = order.price;
+                if (!yesOrderBook[price]) {
+                    yesOrderBook[price] = { quantity: 0 };
+                }
+                yesOrderBook[price].quantity += order.remainingQty;
+            }
+
+            for (const order of noOrders) {
+                const price = order.price;
+                if (!noOrderBook[price]) {
+                    noOrderBook[price] = { quantity: 0 };
+                }
+                noOrderBook[price].quantity += order.remainingQty;
+            }
+
+            const responsePayload = {
+                type: 'get_orderbook_response',
+                data: {
+                    success: true,
+                    data: {
+                        yesOrderBook,
+                        noOrderBook
+                    }
+                }
+            };
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const responsePayload = {
+                type: 'get_orderbook_response',
+                data: {
+                    success: false,
+                    data: {
+                        message: 'Failed to get orderbook',
+                        error: errorMessage
+                    }
+                }
+            };
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            });
+        }
+    }
+    private async handleSell(request: any) {
+        const { correlationId } = request;
+        const { token, symbol, quantity, price, stockType } = request.payload;
+        const priceInPaise = price * 100
+
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const seller = this.usersMap.get(userId);
+            if (!seller) {
+                throw new Error("seller not found in the database");
+            }
+
+            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.active)
+
+            if (!market) {
+                throw new Error(`Active market with symbol ${symbol} not found`);
+            }
+
+            const sellerStockBalance = seller.balance.stocks[symbol][stockType as Side];
+            if (!sellerStockBalance || sellerStockBalance.quantity < quantity) {
+                throw new Error("You don't have sufficient stocks to sell");
+            }
+
+            const sellOrder: Order = {
+                id: uuidv4(),
+                userId,
+                marketSymbol: symbol,
+                side: stockType as Side,
+                quantity,
+                remainingQty: quantity,
+                price: priceInPaise,
+                status: OrderStatus.PENDING,
+                timestamp: new Date()
+            }
+
+            sellerStockBalance.quantity -= quantity;
+            sellerStockBalance.locked += quantity;
+
+            let matchingResult = {
+                filledQty: 0,
+                totalValue: 0,
+                matches: [] as Array<{ quantity: number, price: number }>
+            }
+
+            const buyOrders = this.buyOrders.get(symbol) || [];
+            const matchingBuyOrders = buyOrders?.filter(order =>
+                order.side === stockType &&
+                order.price >= priceInPaise &&
+                order.status !== OrderStatus.FILLED &&
+                order.status !== OrderStatus.CANCELLED &&
+                order.userId !== userId
+            ).sort((a, b) => b.price - a.price)
+
+            for (const buyOrder of matchingBuyOrders) {
+                if (sellOrder.remainingQty === 0) break;
+                const matchedQuantity = Math.min(buyOrder.remainingQty, sellOrder.remainingQty);
+                const matchPrice = buyOrder.price;
+
+                sellOrder.remainingQty -= matchedQuantity;
+                buyOrder.remainingQty -= matchedQuantity;
+
+                const buyer = this.usersMap.get(buyOrder.userId);
+                if (!buyer) {
+                    throw new Error("Could not find Buyer");
+                }
+                const matchValue = matchPrice * matchedQuantity;
+
+                seller.balance.INR.available += matchValue;
+                buyer.balance.INR.locked -= matchValue;
+
+                if (!buyer.balance.stocks[symbol]) {
+                    buyer.balance.stocks[symbol] = {}
+                }
+
+                if (!buyer.balance.stocks[symbol][stockType as Side]) {
+                    buyer.balance.stocks[symbol][stockType as Side] = {
+                        quantity: 0,
+                        locked: 0
+                    }
+                }
+                buyer.balance.stocks[symbol][stockType as Side]!.quantity += matchedQuantity
+                sellerStockBalance.locked -= matchedQuantity;
+
+                matchingResult.filledQty += matchedQuantity;
+                matchingResult.totalValue += matchValue;
+                matchingResult.matches.push({ quantity: matchedQuantity, price: matchPrice / 100 });
+
+                if (buyOrder.remainingQty === 0) {
+                    buyOrder.status = OrderStatus.FILLED;
+                    this.buyOrders.set(symbol,
+                        buyOrders.filter(order => order.id !== sellOrder.id)
+                    );
+                } else {
+                    buyOrder.status = OrderStatus.PARTIALLY_FILLED
+                }
+            }
+
+            if (sellOrder.remainingQty === 0) {
+                sellOrder.status = OrderStatus.FILLED
+            } else {
+                if (matchingResult.matches.length > 0) {
+                    sellOrder.status = OrderStatus.PARTIALLY_FILLED;
+                }
+                const existingSellOrders = this.sellOrders.get(symbol) || [];
+                existingSellOrders.push(sellOrder);
+                this.sellOrders.set(symbol, existingSellOrders)
+            }
+
+            const responsePayload = {
+                type: 'sell_response',
+                data: {
+                    success: true,
+                    orderId: sellOrder.id,
+                    status: sellOrder.status,
+                    filledQuantity: matchingResult.filledQty,
+                    totalValue: matchingResult.totalValue,
+                    matches: matchingResult.matches
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            });
+        } catch (error) {
+            const responsePayload = {
+                type: 'sell_response',
+                data: {
+                    success: false,
+                    message: error instanceof Error ? error.message : 'Failed to process sell order'
+                }
+            };
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            });
+        }
+    }
+
+    private async handleBuy(request: any) {
+        const { correlationId } = request;
+        const { token, symbol, quantity, price, stockType } = request.payload;
+        const priceInPaise = price * 100
+
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const user = this.usersMap.get(userId);
+            console.log('user', user)
+            if (!user) {
+                throw new Error('User not found')
+            }
+
+            const market = Array.from(this.marketsMap.values())
+                .find(m => m.symbol === symbol);
+
+            if (!market) {
+                throw new Error('Market not found')
+            }
+            if (market.status !== MarketStatus.active) {
+                throw new Error('Market is not active');
+            }
+
+            const requiredFunds = quantity * priceInPaise;
+            if (user.balance.INR.available < requiredFunds) {
+                throw new Error("Insufficient funds");
+            }
+
+            const buyOrder: Order = {
+                id: uuidv4(),
+                userId,
+                marketSymbol: symbol,
+                side: stockType as Side,
+                quantity,
+                remainingQty: quantity,
+                price: priceInPaise,
+                status: OrderStatus.PENDING,
+                timestamp: new Date()
+            }
+            user.balance.INR.available -= requiredFunds;
+            user.balance.INR.locked += requiredFunds;
+
+            let matchingResult = {
+                filledQty: 0,
+                totalValue: 0,
+                matches: [] as Array<{ quantity: number, price: number }>
+            }
+
+            const sellOrders = this.sellOrders.get(symbol) || [];
+            const matchedSellOrders = sellOrders
+                .filter(order =>
+                    order.side === stockType &&
+                    order.price <= priceInPaise &&
+                    order.status !== OrderStatus.FILLED &&
+                    order.status !== OrderStatus.CANCELLED &&
+                    order.userId !== userId
+                ).sort((a, b) => a.price - b.price)
+
+            for (const sellOrder of matchedSellOrders) {
+                if (buyOrder.remainingQty === 0) break;
+                const matchedQuantity = Math.min(sellOrder.remainingQty, buyOrder.remainingQty);
+                const matchPrice = sellOrder.price;
+
+                sellOrder.remainingQty -= matchedQuantity;
+                buyOrder.remainingQty -= matchedQuantity;
+
+                const seller = this.usersMap.get(sellOrder.userId);
+                const matchValue = matchPrice * matchedQuantity;
+
+                if (!user.balance.stocks[symbol]) {
+                    user.balance.stocks[symbol] = {}
+                }
+
+                if (!user.balance.stocks[symbol][stockType as Side]) {
+                    user.balance.stocks[symbol][stockType as Side] = {
+                        quantity: 0,
+                        locked: 0
+                    }
+                }
+
+                const sellerPosition = seller?.balance.stocks[symbol]?.[stockType as Side];
+                if (!sellerPosition) {
+                    throw new Error('Seller position not found');
+                }
+
+                user.balance.stocks[symbol][stockType as Side]!.quantity += matchedQuantity;
+                sellerPosition.locked -= matchedQuantity;
+
+                user.balance.INR.locked -= matchValue;
+                seller.balance.INR.available += matchValue;
+
+                matchingResult.filledQty += matchedQuantity;
+                matchingResult.totalValue += matchValue;
+                matchingResult.matches.push({ quantity: matchedQuantity, price: matchPrice / 100 })
+
+                if (sellOrder.remainingQty === 0) {
+                    sellOrder.status = OrderStatus.FILLED;
+                    this.sellOrders.set(symbol,
+                        sellOrders.filter(order => order.id !== sellOrder.id)
+                    );
+                } else {
+                    sellOrder.status = OrderStatus.PARTIALLY_FILLED;
+                }
+            }
+            if (buyOrder.remainingQty === 0) {
+                buyOrder.status = OrderStatus.FILLED;
+                user.balance.INR.available = requiredFunds - matchingResult.totalValue;
+                user.balance.INR.locked = 0;
+            } else {
+                if (matchingResult.matches.length > 0) {
+                    buyOrder.status = OrderStatus.PARTIALLY_FILLED;
+                }
+                const existingBuyOrders = this.buyOrders.get(symbol) || [];
+                existingBuyOrders.push(buyOrder);
+                this.buyOrders.set(symbol, existingBuyOrders);
+            }
+            const responsePayload = {
+                type: 'buy_response',
+                data: {
+                    success: true,
+                    orderId: buyOrder.id,
+                    status: buyOrder.status,
+                    filledQuantity: matchingResult.filledQty,
+                    remainingQuantity: buyOrder.remainingQty,
+                    totalValue: matchingResult.totalValue / 100,
+                    matches: matchingResult.matches
+                }
+            };
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            });
+        } catch (error) {
+            const responsePayload = {
+                type: 'buy_response',
+                data: {
+                    success: false,
+                    message: error instanceof Error ? error.message : 'Failed to process buy order'
+                }
+            };
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            });
+        }
+    }
+
+    private async handleOnrampInr(request: any) {
+        const { correlationId } = request;
+        const { token, amount } = request.payload;
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+
+            const db_user = this.usersMap.get(userId);
+            if (!db_user) {
+                throw new Error('user not found in the database')
+            }
+
+            db_user.balance.INR.available += amount * 100;
+
+            const responsePayload = {
+                type: 'onramp_inr_response',
+                data: {
+                    success: true,
+                    message: `Onramped ${amount} INR to ${userId} successfully`
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occured'
+            const responsePayload = {
+                type: 'onramp_inr_response',
+                data: {
+                    success: false,
+                    message: "Failed to onramp INR",
+                    error: errorMessage
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: "responses",
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        }
+    }
+
     private async handleCreateCategory(request: any) {
         const { correlationId } = request;
         const { token, title, icon, description } = request.payload
         try {
             const userId = this.verifyTokenAndGetUserId(token);
 
-            const db_user = this.usesrMap.get(userId);
+            const db_user = this.usersMap.get(userId);
             if (!db_user) {
                 throw new Error('user not found in the database')
             }
@@ -168,7 +692,7 @@ export class Engine {
         try {
             const userId = this.verifyTokenAndGetUserId(token);
 
-            const db_user = this.usesrMap.get(userId);
+            const db_user = this.usersMap.get(userId);
             if (!db_user) {
                 throw new Error('user not found in the database')
             }
@@ -362,7 +886,7 @@ export class Engine {
                     stocks: {}
                 }
             }
-            this.usesrMap.set(userId, newUser)
+            this.usersMap.set(userId, newUser)
             const responsePayload = {
                 type: 'signup_response',
                 data: {
