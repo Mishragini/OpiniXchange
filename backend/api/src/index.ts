@@ -42,6 +42,23 @@ app.post("/login", async (req, res) => {
 
 })
 
+app.get("/me", async (req, res) => {
+    const token = req.headers["authorization"]?.split(' ')[1];
+    if (!token) {
+        res.json(403).json({ message: "Unauthorized" })
+        return
+    }
+
+    const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
+        type: 'get_me',
+        payload: {
+            token
+        }
+    })
+
+    res.json(responseFromEngine)
+})
+
 app.get("/markets", async (req, res) => {
     const token = req.headers["authorization"]?.split(' ')[1];
     if (!token) {

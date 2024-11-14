@@ -1,3 +1,19 @@
+type getMeReq = {
+    type: 'get_me',
+    payload: {
+        token: string
+    }
+}
+
+type cancelOrderReq = {
+    type: 'cancel_buy_order' | 'cancel_sell_order',
+    payload: {
+        token: string,
+        orderId: string,
+        marketSymbol: string
+    }
+}
+
 type signUpReq = {
     type: "signup",
     payload: {
@@ -106,4 +122,4 @@ type mintReq = {
     }
 }
 
-export type RequestPayload = signUpReq | loginReq | getMarketReq | getMarketsReq | buyReq | sellReq | getOrderbookReq | mintReq | createMarketReq | onrampInrReq | createCategoryReq;
+export type RequestPayload = signUpReq | loginReq | getMarketReq | getMarketsReq | buyReq | sellReq | getOrderbookReq | mintReq | createMarketReq | onrampInrReq | createCategoryReq | getMeReq | cancelOrderReq;

@@ -108,6 +108,15 @@ export class Engine {
                 case 'mint':
                     await this.handleMint(request);
                     break;
+                case 'get_me':
+                    await this.handleGetMe(request);
+                    break;
+                case 'cancel_buy_order':
+                    await this.handleCancelBuyOrder(request);
+                    break;
+                case 'cancel_sell_order':
+                    await this.handleCancelSellOrder(request);
+                    break;
                 default:
                     throw new Error(`Unsupported request type: ${(request as any).type}`);
             }
@@ -118,6 +127,171 @@ export class Engine {
         }
     }
 
+    private async handleCancelBuyOrder(request: any) {
+        const { correlationId } = request;
+        const { token, orderId, marketSymbol } = request.payload;
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const user = this.usersMap.get(userId);
+            if (!user) {
+                throw new Error("User not found");
+
+            }
+
+            const orderToCancel = this.buyOrders.get(marketSymbol)
+                ?.find(order => order.id === orderId && order.userId === userId)
+            if (!orderToCancel) {
+                throw new Error("Order to cancel not found.");
+            }
+            const refund = orderToCancel.price * orderToCancel.remainingQty;
+            user.balance.INR.available += refund;
+            user.balance.INR.locked -= refund;
+
+            orderToCancel.status = OrderStatus.CANCELLED;
+
+            const currentOrders = this.buyOrders.get(marketSymbol)?.filter(order => order.id !== orderId) || []
+            this.buyOrders.set(marketSymbol, currentOrders);
+            const responsePayload = {
+                type: 'cancel_buy_order_response',
+                data: {
+                    success: true,
+                    message: `Cancelled order ${orderId} successfully`,
+                    buyOrders: this.buyOrders.values()
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+            const responsePayload = {
+                type: 'cancel_buy_order_response',
+                data: {
+                    success: false,
+                    message: `Failed to cancel the order`,
+                    error: errorMessage
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        }
+    }
+
+    private async handleCancelSellOrder(request: any) {
+        const { correlationId } = request;
+        const { token, orderId, marketSymbol } = request.payload;
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const user = this.usersMap.get(userId);
+            if (!user) {
+                throw new Error("User not found");
+
+            }
+
+            const orderToCancel = this.sellOrders.get(marketSymbol)
+                ?.find(order => order.id === orderId && order.userId === userId)
+            if (!orderToCancel) {
+                throw new Error("Order to cancel not found.");
+            }
+            const refund = orderToCancel.remainingQty;
+            user.balance.stocks[marketSymbol as string][orderToCancel.side as Side]!.quantity += refund;
+            user.balance.stocks[marketSymbol as string][orderToCancel.side as Side]!.locked -= refund;
+
+            orderToCancel.status = OrderStatus.CANCELLED;
+
+            const currentOrders = this.buyOrders.get(marketSymbol)?.filter(order => order.id !== orderId) || []
+            this.buyOrders.set(marketSymbol, currentOrders);
+            const responsePayload = {
+                type: 'cancel_sell_order_response',
+                data: {
+                    success: true,
+                    message: `Cancelled order ${orderId} successfully`,
+                    sellOrders: this.sellOrders.values()
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+            const responsePayload = {
+                type: 'cancel_buy_order_response',
+                data: {
+                    success: false,
+                    message: `Failed to cancel the order`,
+                    error: errorMessage
+                }
+            }
+
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        }
+    }
+
+    private async handleGetMe(request: any) {
+        const { correlationId } = request;
+        const { token } = request.payload;
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const user = this.usersMap.get(userId);
+            if (!user) {
+                throw new Error("User bot found");
+            }
+            const responsePayload = {
+                type: 'get_me_response',
+                data: {
+                    success: true,
+                    user
+                }
+            }
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+            const responsePayload = {
+                type: 'get_me_response',
+                data: {
+                    success: false,
+                    message: errorMessage
+                }
+            }
+            await KafkaManager.getInstance().sendToApi({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        }
+    }
 
     private async handleMint(request: any) {
         const { correlationId } = request;
@@ -139,11 +313,12 @@ export class Engine {
 
             }
             const userBalance = user.balance.INR.available!;
+            const totalCost = 2 * quantity * priceInPaise;
             if (userBalance < 2 * quantity * priceInPaise) {
                 throw new Error("Insufficient INR balance");
             }
-            user.balance.INR.available -= priceInPaise * 2;
-            user.balance.INR.locked += priceInPaise * 2;
+            user.balance.INR.available -= totalCost;
+            user.balance.INR.locked += totalCost;
 
             if (!user.balance.stocks[symbol]) {
                 user.balance.stocks[symbol] = {
@@ -701,7 +876,7 @@ export class Engine {
             }
             const db_category = this.getCategoryfromTitle(categoryTitle)
             if (!db_category) {
-                throw new Error("Ctegory not found")
+                throw new Error("Category not found")
             }
             const marketId = uuidv4()
             const newMarket: Market = {
@@ -732,11 +907,12 @@ export class Engine {
                 }]
             })
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
             const responsePayload = {
                 type: 'create_market_response',
                 data: {
                     success: false,
-                    message: "Market creation failed"
+                    message: `Market creation failed. ${errorMessage}`
                 }
             }
 
