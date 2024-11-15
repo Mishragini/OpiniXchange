@@ -72,6 +72,82 @@ export class Engine {
         return category;
     }
 
+    private async sendMarketUpdate(market: Market) {
+        console.log(`inside sendMarketUpdate`)
+        const category = this.categoriesMap.get(market.categoryId);
+
+        const marketUpdate = {
+            type: 'market_update',
+            marketSymbol: market.symbol,
+            data: {
+                status: market.status,
+                lastPrice: market.status,
+                totalVolume: market.totalVolume,
+                category
+            }
+        }
+        await KafkaManager.getInstance().sendToKafkaStream({
+            topic: 'market-updates',
+            messages: [{
+                key: market.symbol,
+                value: JSON.stringify(marketUpdate)
+            }]
+        })
+        console.log(`market update sent `)
+    }
+
+    private createOrderbookData(symbol: string) {
+        const sellOrders = this.sellOrders.get(symbol) || [];
+
+        const yesOrders = sellOrders.filter(order => order.side === Side.yes);
+        const noOrders = sellOrders.filter(order => order.side === Side.no);
+
+        const yesOrderBook: Orderbook = {};
+        const noOrderBook: Orderbook = {};
+
+        for (const order of yesOrders) {
+            const price = order.price;
+            if (!yesOrderBook[price]) {
+                yesOrderBook[price] = { quantity: 0 };
+            }
+            yesOrderBook[price].quantity += order.remainingQty;
+        }
+
+        for (const order of noOrders) {
+            const price = order.price;
+            if (!noOrderBook[price]) {
+                noOrderBook[price] = { quantity: 0 };
+            }
+            noOrderBook[price].quantity += order.remainingQty;
+        }
+
+        return {
+            yesOrderBook,
+            noOrderBook
+        };
+    }
+
+    private async sendOrderbookUpdate(symbol: string) {
+        const orderbookData = this.createOrderbookData(symbol);
+
+        const orderbookUpdate = {
+            type: 'orderbook_update',
+            data: {
+                success: true,
+                marketSymbol: symbol,
+                data: orderbookData
+            }
+        };
+
+        await KafkaManager.getInstance().sendToKafkaStream({
+            topic: 'orderbook-updates',
+            messages: [{
+                key: symbol,
+                value: JSON.stringify(orderbookUpdate)
+            }]
+        })
+    }
+
     public async processReq(request: any) {
         try {
             switch (request.type) {
@@ -160,7 +236,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -179,7 +255,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -211,8 +287,10 @@ export class Engine {
 
             orderToCancel.status = OrderStatus.CANCELLED;
 
-            const currentOrders = this.buyOrders.get(marketSymbol)?.filter(order => order.id !== orderId) || []
-            this.buyOrders.set(marketSymbol, currentOrders);
+            const currentOrders = this.sellOrders.get(marketSymbol)?.filter(order => order.id !== orderId) || []
+            this.sellOrders.set(marketSymbol, currentOrders);
+
+            await this.sendOrderbookUpdate(marketSymbol)
             const responsePayload = {
                 type: 'cancel_sell_order_response',
                 data: {
@@ -222,7 +300,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -233,7 +311,7 @@ export class Engine {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
             const responsePayload = {
-                type: 'cancel_buy_order_response',
+                type: 'cancel_sell_order_response',
                 data: {
                     success: false,
                     message: `Failed to cancel the order`,
@@ -241,127 +319,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
-                topic: 'responses',
-                messages: [{
-                    key: correlationId,
-                    value: JSON.stringify(responsePayload)
-                }]
-            })
-        }
-    }
-
-    private async handleGetMe(request: any) {
-        const { correlationId } = request;
-        const { token } = request.payload;
-        try {
-            const userId = this.verifyTokenAndGetUserId(token);
-            const user = this.usersMap.get(userId);
-            if (!user) {
-                throw new Error("User bot found");
-            }
-            const responsePayload = {
-                type: 'get_me_response',
-                data: {
-                    success: true,
-                    user
-                }
-            }
-            await KafkaManager.getInstance().sendToApi({
-                topic: 'responses',
-                messages: [{
-                    key: correlationId,
-                    value: JSON.stringify(responsePayload)
-                }]
-            })
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-            const responsePayload = {
-                type: 'get_me_response',
-                data: {
-                    success: false,
-                    message: errorMessage
-                }
-            }
-            await KafkaManager.getInstance().sendToApi({
-                topic: 'responses',
-                messages: [{
-                    key: correlationId,
-                    value: JSON.stringify(responsePayload)
-                }]
-            })
-        }
-    }
-
-    private async handleMint(request: any) {
-        const { correlationId } = request;
-        const { token, symbol, quantity, price } = request.payload;
-        const priceInPaise = price * 100
-        try {
-            const userId = this.verifyTokenAndGetUserId(token);
-            const user = this.usersMap.get(userId);
-            if (!user) {
-                throw new Error('User not found in the database.')
-            }
-            if (user.role !== "admin") {
-                throw new Error("Only admins can mint tokens");
-
-            }
-            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.active);
-            if (!market) {
-                throw new Error(`Active market with symbol ${symbol} does not exist`);
-
-            }
-            const userBalance = user.balance.INR.available!;
-            const totalCost = 2 * quantity * priceInPaise;
-            if (userBalance < 2 * quantity * priceInPaise) {
-                throw new Error("Insufficient INR balance");
-            }
-            user.balance.INR.available -= totalCost;
-            user.balance.INR.locked += totalCost;
-
-            if (!user.balance.stocks[symbol]) {
-                user.balance.stocks[symbol] = {
-                    yes: { quantity: 0, locked: 0 },
-                    no: { quantity: 0, locked: 0 }
-                };
-            }
-            user.balance.stocks[symbol].yes!.quantity += quantity;
-            user.balance.stocks[symbol].no!.quantity += quantity;
-            user.balance.INR.locked = 0;
-
-            const responsePayload = {
-                type: 'mint_response',
-                data: {
-                    success: true,
-                    data: {
-                        message: `Minted ${quantity} yes and ${quantity} no tokens of ${symbol} to ${userId}`
-                    }
-                }
-            }
-
-            await KafkaManager.getInstance().sendToApi({
-                topic: 'responses',
-                messages: [{
-                    key: correlationId,
-                    value: JSON.stringify(responsePayload)
-                }]
-            })
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occured'
-            const responsePayload = {
-                type: 'mint_response',
-                data: {
-                    success: false,
-                    data: {
-                        message: `Minted failed`,
-                        error: errorMessage
-                    }
-                }
-            }
-
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -382,42 +340,17 @@ export class Engine {
                 throw new Error(`Active market ${symbol} not found`);
             }
 
-            const sellOrders = this.sellOrders.get(symbol) || [];
-
-            const yesOrders = sellOrders.filter(order => order.side === Side.yes);
-            const noOrders = sellOrders.filter(order => order.side === Side.no);
-
-            const yesOrderBook: Orderbook = {};
-            const noOrderBook: Orderbook = {};
-
-            for (const order of yesOrders) {
-                const price = order.price;
-                if (!yesOrderBook[price]) {
-                    yesOrderBook[price] = { quantity: 0 };
-                }
-                yesOrderBook[price].quantity += order.remainingQty;
-            }
-
-            for (const order of noOrders) {
-                const price = order.price;
-                if (!noOrderBook[price]) {
-                    noOrderBook[price] = { quantity: 0 };
-                }
-                noOrderBook[price].quantity += order.remainingQty;
-            }
+            const orderbookData = this.createOrderbookData(symbol);
 
             const responsePayload = {
                 type: 'get_orderbook_response',
                 data: {
                     success: true,
-                    data: {
-                        yesOrderBook,
-                        noOrderBook
-                    }
+                    data: orderbookData
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -437,7 +370,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -552,6 +485,7 @@ export class Engine {
                 const existingSellOrders = this.sellOrders.get(symbol) || [];
                 existingSellOrders.push(sellOrder);
                 this.sellOrders.set(symbol, existingSellOrders)
+                await this.sendOrderbookUpdate(symbol)
             }
 
             const responsePayload = {
@@ -566,7 +500,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -582,7 +516,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -600,7 +534,6 @@ export class Engine {
         try {
             const userId = this.verifyTokenAndGetUserId(token);
             const user = this.usersMap.get(userId);
-            console.log('user', user)
             if (!user) {
                 throw new Error('User not found')
             }
@@ -702,11 +635,16 @@ export class Engine {
                 user.balance.INR.locked = 0;
             } else {
                 if (matchingResult.matches.length > 0) {
+                    console.log(`when matched`)
+                    market.lastPrice = matchingResult.matches[matchingResult.matches.length - 1].price;
+                    market.totalVolume += matchingResult.filledQty;
+                    await this.sendMarketUpdate(market);
                     buyOrder.status = OrderStatus.PARTIALLY_FILLED;
                 }
                 const existingBuyOrders = this.buyOrders.get(symbol) || [];
                 existingBuyOrders.push(buyOrder);
                 this.buyOrders.set(symbol, existingBuyOrders);
+
             }
             const responsePayload = {
                 type: 'buy_response',
@@ -721,7 +659,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -737,7 +675,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -768,7 +706,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -787,7 +725,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: "responses",
                 messages: [{
                     key: correlationId,
@@ -832,7 +770,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -850,7 +788,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -886,7 +824,9 @@ export class Engine {
                 description,
                 sourceOfTruth,
                 categoryId: db_category.id,
-                status: MarketStatus.active
+                status: MarketStatus.active,
+                lastPrice: 0,
+                totalVolume: 0
             }
             this.marketsMap.set(marketId, newMarket)
 
@@ -899,7 +839,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -916,7 +856,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -943,7 +883,7 @@ export class Engine {
                     }
                 };
 
-                await KafkaManager.getInstance().sendToApi({
+                await KafkaManager.getInstance().sendToKafkaStream({
                     topic: 'responses',
                     messages: [{
                         key: correlationId,
@@ -962,7 +902,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -980,7 +920,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -1007,7 +947,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -1025,7 +965,7 @@ export class Engine {
                 }
             };
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -1038,7 +978,6 @@ export class Engine {
     private async handleSignUp(request: any) {
         const { correlationId } = request
         const { username, email, password, role } = request.payload;
-        console.log("correlationId", correlationId)
         try {
             if (this.findUserByUsername(username)) {
                 throw new Error('Username already exists')
@@ -1072,7 +1011,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -1089,7 +1028,7 @@ export class Engine {
                     message: errorMessage
                 }
             }
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -1124,7 +1063,7 @@ export class Engine {
                 }
             }
 
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,
@@ -1141,7 +1080,126 @@ export class Engine {
                     message: errorMessage
                 }
             }
-            await KafkaManager.getInstance().sendToApi({
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        }
+    }
+    private async handleGetMe(request: any) {
+        const { correlationId } = request;
+        const { token } = request.payload;
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const user = this.usersMap.get(userId);
+            if (!user) {
+                throw new Error("User bot found");
+            }
+            const responsePayload = {
+                type: 'get_me_response',
+                data: {
+                    success: true,
+                    user
+                }
+            }
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+            const responsePayload = {
+                type: 'get_me_response',
+                data: {
+                    success: false,
+                    message: errorMessage
+                }
+            }
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        }
+    }
+
+    private async handleMint(request: any) {
+        const { correlationId } = request;
+        const { token, symbol, quantity, price } = request.payload;
+        const priceInPaise = price * 100
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const user = this.usersMap.get(userId);
+            if (!user) {
+                throw new Error('User not found in the database.')
+            }
+            if (user.role !== "admin") {
+                throw new Error("Only admins can mint tokens");
+
+            }
+            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.active);
+            if (!market) {
+                throw new Error(`Active market with symbol ${symbol} does not exist`);
+
+            }
+            const userBalance = user.balance.INR.available!;
+            const totalCost = 2 * quantity * priceInPaise;
+            if (userBalance < 2 * quantity * priceInPaise) {
+                throw new Error("Insufficient INR balance");
+            }
+            user.balance.INR.available -= totalCost;
+            user.balance.INR.locked += totalCost;
+
+            if (!user.balance.stocks[symbol]) {
+                user.balance.stocks[symbol] = {
+                    yes: { quantity: 0, locked: 0 },
+                    no: { quantity: 0, locked: 0 }
+                };
+            }
+            user.balance.stocks[symbol].yes!.quantity += quantity;
+            user.balance.stocks[symbol].no!.quantity += quantity;
+            user.balance.INR.locked = 0;
+
+            const responsePayload = {
+                type: 'mint_response',
+                data: {
+                    success: true,
+                    data: {
+                        message: `Minted ${quantity} yes and ${quantity} no tokens of ${symbol} to ${userId}`
+                    }
+                }
+            }
+
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occured'
+            const responsePayload = {
+                type: 'mint_response',
+                data: {
+                    success: false,
+                    data: {
+                        message: `Minted failed`,
+                        error: errorMessage
+                    }
+                }
+            }
+
+            await KafkaManager.getInstance().sendToKafkaStream({
                 topic: 'responses',
                 messages: [{
                     key: correlationId,

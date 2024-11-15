@@ -65,7 +65,7 @@ user_router.post("/sell", async (req, res) => {
     res.json(responseFromEngine)
 })
 
-user_router.post("/cancel/buy/:orderId", async (req, res) => {
+user_router.post("/cancel/buy", async (req, res) => {
     const token = req.headers["authorization"]?.split(' ')[1]
     const orderId = req.query.orderId as string;
     const marketSymbol = req.query.marketSymbol as string

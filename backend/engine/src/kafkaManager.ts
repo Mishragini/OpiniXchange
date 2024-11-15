@@ -11,7 +11,7 @@ export class KafkaManager {
 
     private constructor() {
         const kafka = new Kafka({
-            clientId: "my-app",
+            clientId: "engine",
             brokers: ["localhost:9092"]
         });
 
@@ -37,12 +37,11 @@ export class KafkaManager {
         return this.instance
     }
 
-    public async sendToApi(message: KafkaMessage) {
+    public async sendToKafkaStream(message: KafkaMessage) {
         try {
             if (!this.isInitialized) {
                 await this.initialize();
             }
-            console.log("message", message)
             await this.producer.send({
                 topic: message.topic,
                 messages: message.messages.map(msg => ({

@@ -40,6 +40,8 @@ export interface Market {
     sourceOfTruth: string,
     categoryId: string,
     status: MarketStatus,
+    lastPrice:number,
+    totalVolume:number,
     resolvedOutcome?: Side
 }
 

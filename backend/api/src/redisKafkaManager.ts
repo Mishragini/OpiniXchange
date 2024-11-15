@@ -11,12 +11,12 @@ export class RedisKafkaManager {
 
     private constructor() {
         const kafka = new Kafka({
-            clientId: "my-app",
+            clientId: 'api-server',
             brokers: ["localhost:9092"]
         });
 
         this.queue = createClient();
-        this.consumer = kafka.consumer({ groupId: 'api-server' });
+        this.consumer = kafka.consumer({ groupId: 'api-server-group' });
         this.messageHandlers = new Map();
     }
 
