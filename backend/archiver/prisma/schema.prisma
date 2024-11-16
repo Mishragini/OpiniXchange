@@ -32,7 +32,7 @@ enum Side {
 enum OrderStatus {
   PENDING
   FILLED
-  PARTAILLY_FILLED
+  PARTIALLY_FILLED
   CANCELLED
 }
 

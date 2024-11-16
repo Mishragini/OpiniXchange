@@ -63,10 +63,6 @@ type onrampInrReq = {
     }
 }
 
-enum stockType {
-    yes = "yes",
-    no = "no"
-}
 
 type buyReq = {
     type: 'buy',
@@ -75,7 +71,7 @@ type buyReq = {
         symbol: string,
         quantity: number,
         price: number,
-        stockType: stockType
+        stockType: 'YES' | 'NO'
     }
 }
 
@@ -86,7 +82,7 @@ type sellReq = {
         symbol: string,
         quantity: number,
         price: number,
-        stockType: stockType
+        stockType: 'YES' | 'NO'
     }
 }
 

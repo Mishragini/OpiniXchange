@@ -1,23 +1,22 @@
 import { Router } from "express";
 import { RedisKafkaManager } from "../redisKafkaManager";
+import { CategorySchema, MarketSchema, MintSchema } from "../inputSchema";
+import { AuthenticatedRequest, authenticateToken } from "../middlewares/auth";
 
-export const admin_router = Router()
+export const adminRouter = Router()
 
-admin_router.post('/create/category', async (req, res) => {
-    const token = req.headers["authorization"]?.split(' ')[1]
-    if (!token) {
-        res.json(403).json({ message: "Unauthorized" })
-        return
-    }
-    const { title, icon, description } = req.body
-    if (!title || !icon || !description) {
+adminRouter.post('/create/category', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    const parsedResponse = CategorySchema.safeParse(req.body)
+    if (!parsedResponse.success) {
         res.status(400).json({ message: "Invalid inputs" })
         return
     }
+    const { title, icon, description } = parsedResponse.data;
+
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'create_category',
         payload: {
-            token,
+            token: req.token!,
             title,
             icon,
             description
@@ -26,21 +25,18 @@ admin_router.post('/create/category', async (req, res) => {
     res.json(responseFromEngine)
 })
 
-admin_router.post("/create/market", async (req, res) => {
-    const token = req.headers["authorization"]?.split(' ')[1]
-    if (!token) {
-        res.json(403).json({ message: "Unauthorized" })
-        return
-    }
-    const { symbol, description, endTime, sourceOfTruth, categoryTitle } = req.body
-    if (!symbol || !description || !endTime || !sourceOfTruth) {
+adminRouter.post("/create/market", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    const parsedResponse = MarketSchema.safeParse(req.body);
+    if (!parsedResponse.success) {
         res.status(400).json({ message: "Invalid inputs" })
         return
     }
+    const { symbol, description, endTime, sourceOfTruth, categoryTitle } = parsedResponse.data
+
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'create_market',
         payload: {
-            token,
+            token: req.token!,
             symbol,
             endTime,
             description,
@@ -51,21 +47,18 @@ admin_router.post("/create/market", async (req, res) => {
     res.json(responseFromEngine)
 })
 
-admin_router.post('/mint', async (req, res) => {
-    const { symbol, quantity, price } = req.body
-    const token = req.headers["authorization"]?.split(' ')[1]
-    if (!token) {
-        res.json(403).json({ message: "Unauthorized" })
-        return
-    }
-    if (!symbol || !quantity || !price) {
+adminRouter.post('/mint', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    const parsedResponse = MintSchema.safeParse(req.body)
+    if (!parsedResponse.success) {
         res.status(400).json({ message: "Invalid inputs" })
         return
     }
+    const { symbol, quantity, price } = parsedResponse.data
+
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'mint',
         payload: {
-            token,
+            token: req.token!,
             symbol,
             quantity,
             price,

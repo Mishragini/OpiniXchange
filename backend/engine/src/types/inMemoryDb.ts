@@ -9,6 +9,12 @@ export interface Order {
     status: OrderStatus;
     timestamp: Date;
 }
+export enum OrderStatus {
+    PENDING = "PENDING",
+    FILLED = "FILLED",
+    PARTIALLY_FILLED = "PARTIALLY_FILLED",
+    CANCELLED = "CANCELLED"
+}
 
 export interface Orderbook {
     [price: number]: {
@@ -16,12 +22,7 @@ export interface Orderbook {
     }
 }
 
-export enum OrderStatus {
-    PENDING = "PENDING",
-    FILLED = "FILLED",
-    PARTIALLY_FILLED = "PARTIALLY_FILLED",
-    CANCELLED = "CANCELLED"
-}
+
 
 export interface User {
     id: string,

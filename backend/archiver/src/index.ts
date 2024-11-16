@@ -29,6 +29,15 @@ async function main() {
                     case 'signup_response': {
                         const { user } = data;
                         if (user) {
+                            const existingUser = await prisma.user.findFirst({
+                                where: {
+                                    username: user.username
+                                }
+                            })
+                            if (existingUser) {
+                                console.log("User already exists", existingUser)
+                                return;
+                            }
                             await prisma.$transaction(async () => {
                                 const inrBalance = await prisma.inrBalance.create({
                                     data: {
@@ -43,7 +52,7 @@ async function main() {
                                         username: user.username,
                                         email: user.email,
                                         password: user.password,
-                                        role: user.role === "admin" ? "ADMIN" : "USER",
+                                        role: user.role,
                                         userInrBalance: {
                                             connect: {
                                                 id: inrBalance.id,
@@ -93,10 +102,10 @@ async function main() {
                         break;
                     }
                     case 'onramp_inr_response': {
-                        const { userId: onrampUserId, amount } = data;
-                        if (onrampUserId && amount) {
+                        const { user: onrampUser, amount } = data;
+                        if (onrampUser && amount) {
                             const user = await prisma.user.findUnique({
-                                where: { id: onrampUserId },
+                                where: { username: onrampUser.username },
                                 select: { inrBalanceId: true },
                             });
 
@@ -112,17 +121,33 @@ async function main() {
                         break;
                     }
                     case 'buy_response': {
-                        const { buyOrder } = data;
-                        if (buyOrder) {
+                        const { buyOrder, buyer } = data;
+                        console.log("buyer", buyer);
+                        console.log("buyOrder", buyOrder)
+
+                        if (buyOrder && buyer) {
                             const marketData = await prisma.market.findFirst({
                                 where: { symbol: buyOrder.marketSymbol },
                             });
-                            if (!marketData) return;
+                            if (!marketData) {
+                                console.log('market not found in database')
+                                return;
+                            }
+                            const db_user = await prisma.user.findFirst({
+                                where: {
+                                    username: buyer.username
+                                }
+                            })
+                            if (!db_user) {
+                                console.log('buyer found in database')
+                                return;
+                            }
+
                             await prisma.order.create({
                                 data: {
                                     id: buyOrder.id,
                                     user: {
-                                        connect: { id: buyOrder.userId },
+                                        connect: { id: db_user.id },
                                     },
                                     market: {
                                         connect: { id: marketData.id },
@@ -139,17 +164,26 @@ async function main() {
                         break;
                     }
                     case 'sell_response': {
-                        const { sellOrder } = data;
+                        const { sellOrder, seller } = data;
                         if (sellOrder) {
                             const marketData = await prisma.market.findFirst({
                                 where: { symbol: sellOrder.marketSymbol },
                             });
                             if (!marketData) return;
+                            const db_user = await prisma.user.findFirst({
+                                where: {
+                                    username: seller.username
+                                }
+                            })
+                            if (!db_user) {
+                                console.log('seller not found in the database')
+                                return;
+                            }
                             await prisma.order.create({
                                 data: {
                                     id: sellOrder.id,
                                     user: {
-                                        connect: { id: sellOrder.userId },
+                                        connect: { id: db_user.id },
                                     },
                                     market: {
                                         connect: { id: marketData.id },
@@ -166,23 +200,40 @@ async function main() {
                         break;
                     }
                     case 'mint_response': {
-                        const { userId: mintUserId, quantity, symbol } = data;
+                        const { mintUser, quantity, symbol } = data;
+                        if (!mintUser || !quantity || !symbol) {
+                            console.log("mintUser", mintUser);
+                            console.log("quantity", quantity);
+                            console.log("symbol", symbol);
+
+                            return;
+                        }
                         const marketData = await prisma.market.findFirst({
                             where: { symbol },
                         });
 
-                        if (marketData && mintUserId) {
+                        const db_user = await prisma.user.findFirst({
+                            where: {
+                                username: mintUser.username
+                            }
+                        })
+                        if (!db_user) {
+                            console.log('user not found in the database')
+                            return
+                        }
+
+                        if (marketData) {
                             await prisma.stockBalance.createMany({
                                 data: [
                                     {
-                                        userId: mintUserId,
+                                        userId: db_user.id,
                                         marketId: marketData.id,
                                         quantity,
                                         side: Side.YES,
                                         locked: 0,
                                     },
                                     {
-                                        userId: mintUserId,
+                                        userId: db_user.id,
                                         marketId: marketData.id,
                                         quantity,
                                         side: Side.NO,
@@ -194,19 +245,41 @@ async function main() {
                         break;
                     }
                     case 'cancel_buy_order_response': {
-                        const { orderId } = data;
+                        const { cancelledOrderId } = data;
+                        if (!cancelledOrderId) {
+                            console.log("cancelledOrderId", cancelledOrderId)
+                            return;
+                        }
+                        const db_order = await prisma.order.findFirst({
+                            where: { id: cancelledOrderId }
+                        })
+                        if (!db_order) {
+                            console.log("Order not found in the database")
+                            return;
+                        }
                         await prisma.order.delete({
                             where: {
-                                id: orderId
+                                id: cancelledOrderId
                             }
                         })
                         break;
                     }
                     case 'cancel_sell_order_response': {
-                        const { orderId } = data;
+                        const { cancelledOrderId } = data;
+                        if (!cancelledOrderId) {
+                            console.log("cancelledOrderId", cancelledOrderId)
+                            return;
+                        }
+                        const db_order = await prisma.order.findFirst({
+                            where: { id: cancelledOrderId }
+                        })
+                        if (!db_order) {
+                            console.log("Order not found in the database")
+                            return;
+                        }
                         await prisma.order.delete({
                             where: {
-                                id: orderId
+                                id: cancelledOrderId
                             }
                         })
                         break;

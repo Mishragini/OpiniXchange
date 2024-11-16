@@ -1,17 +1,20 @@
 import express from 'express'
 import { RedisKafkaManager } from './redisKafkaManager';
-import { user_router } from './routers/user';
-import { admin_router } from './routers/admin';
+import { userRouter } from './routers/user';
+import { adminRouter } from './routers/admin';
+import { LoginSchema, SignupSchema } from './inputSchema';
+import { AuthenticatedRequest, authenticateToken } from './middlewares/auth';
 
 const app = express();
 app.use(express.json());
 
 app.post("/signup", async (req, res) => {
-    const { username, email, password, role } = req.body;
-    if (!username || !email || !password || !role) {
+    const parsedResponse = SignupSchema.safeParse(req.body)
+    if (!parsedResponse.success) {
         res.status(400).json({ message: "Invalid inputs" })
         return
     }
+    const { username, email, password, role } = parsedResponse.data;
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'signup',
         payload: {
@@ -26,11 +29,12 @@ app.post("/signup", async (req, res) => {
 })
 
 app.post("/login", async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const parsedResponse = LoginSchema.safeParse(req.body);
+    if (!parsedResponse.success) {
         res.status(400).json({ message: "Invalid inputs" })
         return
     }
+    const { email, password } = parsedResponse.data;
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'login',
         payload: {
@@ -42,76 +46,65 @@ app.post("/login", async (req, res) => {
 
 })
 
-app.get("/me", async (req, res) => {
-    const token = req.headers["authorization"]?.split(' ')[1];
-    if (!token) {
-        res.json(403).json({ message: "Unauthorized" })
-        return
-    }
+app.get("/me", authenticateToken, async (req: AuthenticatedRequest, res) => {
 
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'get_me',
         payload: {
-            token
+            token: req.token!
         }
     })
 
     res.json(responseFromEngine)
 })
 
-app.get("/markets", async (req, res) => {
-    const token = req.headers["authorization"]?.split(' ')[1];
-    if (!token) {
-        res.json(403).json({ message: "Unauthorized" })
-        return
-    }
+app.get("/markets", authenticateToken, async (req: AuthenticatedRequest, res) => {
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'get_all_markets',
         payload: {
-            token
+            token: req.token!
         }
     })
     res.json(responseFromEngine)
 })
 
-app.get("/market/:marketSymbol", async (req, res) => {
-    const token = req.headers["authorization"]?.split(' ')[1];
+app.get("/market/:marketSymbol", authenticateToken, async (req: AuthenticatedRequest, res) => {
     const marketSymbol = req.params.marketSymbol;
 
-    if (!token) {
-        res.json(403).json({ message: "Unauthorized" })
-        return
+    if (!marketSymbol) {
+        res.status(400).json({ message: 'Please provide market symbol as paramater' })
+        return;
     }
 
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: "get_market",
         payload: {
-            token,
+            token: req.token!,
             marketSymbol
         }
     })
     res.json(responseFromEngine)
 })
 
-app.get('/orderbook/:symbol', async (req, res) => {
-    const token = req.headers["authorization"]?.split(' ')[1];
+app.get('/orderbook/:symbol', authenticateToken, async (req: AuthenticatedRequest, res) => {
     const symbol = req.params.symbol;
-    if (!token) {
-        res.json(403).json({ message: "Unauthorized" })
-        return
+
+    if (!symbol) {
+        res.status(400).json({ message: 'Please provide market symbol as paramater' })
+        return;
     }
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: "get_orderbook",
         payload: {
-            token,
+            token: req.token!,
             symbol
         }
     })
     res.json(responseFromEngine)
 })
 
-app.use("/user", user_router)
-app.use("/admin", admin_router)
+app.use("/user", userRouter)
+app.use("/admin", adminRouter)
 
 
 const PORT = 3000

@@ -64,6 +64,7 @@ class WSServer {
 
         await this.consumer.run({
             eachMessage: async ({ topic, message }) => {
+                console.log("topic",topic)
                 console.log(`inside consumer`)
                 if (!message.value || !message.key) return;
                 const data = JSON.parse(message.value.toString());

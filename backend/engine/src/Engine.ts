@@ -296,7 +296,7 @@ export class Engine {
                 type: 'cancel_sell_order_response',
                 data: {
                     success: true,
-                    orderId,
+                    cancelledOrderId: orderId,
                     message: `Cancelled order ${orderId} successfully`,
                     sellOrders: this.sellOrders.values()
                 }
@@ -494,6 +494,7 @@ export class Engine {
                 type: 'sell_response',
                 data: {
                     success: true,
+                    seller,
                     sellOrder,
                     filledQuantity: matchingResult.filledQty,
                     totalValue: matchingResult.totalValue,
@@ -652,6 +653,7 @@ export class Engine {
                 data: {
                     success: true,
                     buyOrder,
+                    buyer: user,
                     totalValue: matchingResult.totalValue / 100,
                     matches: matchingResult.matches
                 }
@@ -700,7 +702,7 @@ export class Engine {
                 type: 'onramp_inr_response',
                 data: {
                     success: true,
-                    userId,
+                    user: db_user,
                     amount,
                     message: `Onramped ${amount} INR to ${userId} successfully`
                 }
@@ -745,8 +747,8 @@ export class Engine {
             if (!db_user) {
                 throw new Error('user not found in the database')
             }
-            if (db_user.role !== "admin") {
-                throw new Error("only admins have the permission to create a market ")
+            if (db_user.role.toLowerCase() !== "admin") {
+                throw new Error("only admins have the permission to create a m")
             }
             const db_category = this.getCategoryfromTitle(title);
             if (db_category) {
@@ -809,7 +811,8 @@ export class Engine {
             if (!db_user) {
                 throw new Error('user not found in the database')
             }
-            if (db_user.role !== "admin") {
+            console.log(db_user.role);
+            if (db_user.role.toLocaleLowerCase() !== "admin") {
                 throw new Error("only admins have the permission to create a market ")
             }
             const db_category = this.getCategoryfromTitle(categoryTitle)
@@ -1141,7 +1144,7 @@ export class Engine {
             if (!user) {
                 throw new Error('User not found in the database.')
             }
-            if (user.role !== "admin") {
+            if (user.role.toLowerCase() !== "admin") {
                 throw new Error("Only admins can mint tokens");
 
             }
@@ -1172,12 +1175,10 @@ export class Engine {
                 type: 'mint_response',
                 data: {
                     success: true,
-                    data: {
-                        userId,
-                        quantity,
-                        symbol,
-                        message: `Minted ${quantity} yes and ${quantity} no tokens of ${symbol} to ${userId}`
-                    }
+                    mintUser: user,
+                    quantity,
+                    symbol,
+                    message: `Minted ${quantity} yes and ${quantity} no tokens of ${symbol} to ${userId}`
                 }
             }
 
