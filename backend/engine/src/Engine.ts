@@ -99,8 +99,8 @@ export class Engine {
     private createOrderbookData(symbol: string) {
         const sellOrders = this.sellOrders.get(symbol) || [];
 
-        const yesOrders = sellOrders.filter(order => order.side === Side.yes);
-        const noOrders = sellOrders.filter(order => order.side === Side.no);
+        const yesOrders = sellOrders.filter(order => order.side === Side.YES);
+        const noOrders = sellOrders.filter(order => order.side === Side.NO);
 
         const yesOrderBook: Orderbook = {};
         const noOrderBook: Orderbook = {};
@@ -231,6 +231,7 @@ export class Engine {
                 type: 'cancel_buy_order_response',
                 data: {
                     success: true,
+                    cancelledOrderId: orderId,
                     message: `Cancelled order ${orderId} successfully`,
                     buyOrders: this.buyOrders.values()
                 }
@@ -295,6 +296,7 @@ export class Engine {
                 type: 'cancel_sell_order_response',
                 data: {
                     success: true,
+                    orderId,
                     message: `Cancelled order ${orderId} successfully`,
                     sellOrders: this.sellOrders.values()
                 }
@@ -335,7 +337,7 @@ export class Engine {
 
         try {
             const userId = this.verifyTokenAndGetUserId(token);
-            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.active);
+            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.ACTIVE);
             if (!market) {
                 throw new Error(`Active market ${symbol} not found`);
             }
@@ -391,7 +393,7 @@ export class Engine {
                 throw new Error("seller not found in the database");
             }
 
-            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.active)
+            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.ACTIVE)
 
             if (!market) {
                 throw new Error(`Active market with symbol ${symbol} not found`);
@@ -492,8 +494,7 @@ export class Engine {
                 type: 'sell_response',
                 data: {
                     success: true,
-                    orderId: sellOrder.id,
-                    status: sellOrder.status,
+                    sellOrder,
                     filledQuantity: matchingResult.filledQty,
                     totalValue: matchingResult.totalValue,
                     matches: matchingResult.matches
@@ -544,7 +545,7 @@ export class Engine {
             if (!market) {
                 throw new Error('Market not found')
             }
-            if (market.status !== MarketStatus.active) {
+            if (market.status !== MarketStatus.ACTIVE) {
                 throw new Error('Market is not active');
             }
 
@@ -650,10 +651,7 @@ export class Engine {
                 type: 'buy_response',
                 data: {
                     success: true,
-                    orderId: buyOrder.id,
-                    status: buyOrder.status,
-                    filledQuantity: matchingResult.filledQty,
-                    remainingQuantity: buyOrder.remainingQty,
+                    buyOrder,
                     totalValue: matchingResult.totalValue / 100,
                     matches: matchingResult.matches
                 }
@@ -702,6 +700,8 @@ export class Engine {
                 type: 'onramp_inr_response',
                 data: {
                     success: true,
+                    userId,
+                    amount,
                     message: `Onramped ${amount} INR to ${userId} successfully`
                 }
             }
@@ -765,7 +765,7 @@ export class Engine {
                 type: 'create_category_response',
                 data: {
                     success: true,
-                    categoryId,
+                    category: newCategory,
                     message: "Category created successfully!"
                 }
             };
@@ -824,7 +824,7 @@ export class Engine {
                 description,
                 sourceOfTruth,
                 categoryId: db_category.id,
-                status: MarketStatus.active,
+                status: MarketStatus.ACTIVE,
                 lastPrice: 0,
                 totalVolume: 0
             }
@@ -834,7 +834,7 @@ export class Engine {
                 type: 'create_market_response',
                 data: {
                     success: true,
-                    marketId,
+                    market: newMarket,
                     message: "Market created successfully"
                 }
             }
@@ -1006,7 +1006,7 @@ export class Engine {
                 type: 'signup_response',
                 data: {
                     success: true,
-                    userId,
+                    user: newUser,
                     message: "Signed up successfully!"
                 }
             }
@@ -1145,7 +1145,7 @@ export class Engine {
                 throw new Error("Only admins can mint tokens");
 
             }
-            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.active);
+            const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.ACTIVE);
             if (!market) {
                 throw new Error(`Active market with symbol ${symbol} does not exist`);
 
@@ -1160,12 +1160,12 @@ export class Engine {
 
             if (!user.balance.stocks[symbol]) {
                 user.balance.stocks[symbol] = {
-                    yes: { quantity: 0, locked: 0 },
-                    no: { quantity: 0, locked: 0 }
+                    YES: { quantity: 0, locked: 0 },
+                    NO: { quantity: 0, locked: 0 }
                 };
             }
-            user.balance.stocks[symbol].yes!.quantity += quantity;
-            user.balance.stocks[symbol].no!.quantity += quantity;
+            user.balance.stocks[symbol].YES!.quantity += quantity;
+            user.balance.stocks[symbol].NO!.quantity += quantity;
             user.balance.INR.locked = 0;
 
             const responsePayload = {
@@ -1173,6 +1173,9 @@ export class Engine {
                 data: {
                     success: true,
                     data: {
+                        userId,
+                        quantity,
+                        symbol,
                         message: `Minted ${quantity} yes and ${quantity} no tokens of ${symbol} to ${userId}`
                     }
                 }

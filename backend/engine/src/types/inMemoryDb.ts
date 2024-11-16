@@ -17,10 +17,10 @@ export interface Orderbook {
 }
 
 export enum OrderStatus {
-    PENDING = "pending",
-    FILLED = "filled",
-    PARTIALLY_FILLED = "partially_filled",
-    CANCELLED = "cancelled"
+    PENDING = "PENDING",
+    FILLED = "FILLED",
+    PARTIALLY_FILLED = "PARTIALLY_FILLED",
+    CANCELLED = "CANCELLED"
 }
 
 export interface User {
@@ -40,8 +40,8 @@ export interface Market {
     sourceOfTruth: string,
     categoryId: string,
     status: MarketStatus,
-    lastPrice:number,
-    totalVolume:number,
+    lastPrice: number,
+    totalVolume: number,
     resolvedOutcome?: Side
 }
 
@@ -59,8 +59,8 @@ export interface Position {
 
 export interface StockBalance {
     [marketSymbol: string]: {
-        'yes'?: Position;
-        'no'?: Position;
+        'YES'?: Position;
+        'NO'?: Position;
     };
 }
 
@@ -73,12 +73,12 @@ export interface BalanceStore {
 }
 
 export enum Side {
-    yes = "yes",
-    no = "no"
+    YES = "YES",
+    NO = "NO"
 }
 
 export enum MarketStatus {
-    active = "active",
-    closed = "closed",
-    resolved = "resolved"
+    ACTIVE = "ACTIVE",
+    CLOSED = "CLOSED",
+    RESOLVED = "RESOLVED"
 }

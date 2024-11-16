@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum MarketStatus {
+  ACTIVE
+  CLOSED
+  RESOLVED
+}
+
+enum Side {
+  YES
+  NO
+}
+
+enum OrderStatus {
+  PENDING
+  FILLED
+  PARTAILLY_FILLED
+  CANCELLED
+}
+
+model User {
+  id             String         @id
+  username       String         @unique
+  email          String         @unique
+  password       String
+  role           Role
+  inrBalanceId   String         @unique
+  stockBalances  StockBalance[]
+  userInrBalance InrBalance     @relation(fields: [inrBalanceId], references: [id])
+  Orders         Order[]
+}
+
+model InrBalance {
+  id        String @id @default(uuid())
+  user      User?
+  available Int
+  locked    Int
+}
+
+model StockBalance {
+  id       String @id @default(uuid())
+  user     User   @relation(fields: [userId], references: [id])
+  marketId String
+  market   Market @relation(fields: [marketId], references: [id])
+  side     Side
+  quantity Int
+  locked   Int
+  userId   String
+}
+
+model Category {
+  id          String   @id
+  title       String
+  icon        String
+  description String
+  Market      Market[]
+}
+
+model Market {
+  id              String         @id
+  symbol          String
+  description     String
+  endTime         DateTime
+  sourceOfTruth   String
+  categoryId      String
+  category        Category       @relation(fields: [categoryId], references: [id])
+  status          MarketStatus
+  lastPrice       Int
+  totalVolume     Int
+  resolvedOutcome Side?
+  Orders          Order[]
+  StockBalance    StockBalance[]
+}
+
+model Order {
+  id                String      @id
+  userId            String
+  user              User        @relation(fields: [userId], references: [id])
+  marketId          String
+  market            Market      @relation(fields: [marketId], references: [id])
+  side              Side
+  quantity          Int
+  remainingQuantity Int
+  price             Int
+  status            OrderStatus
+  timestamp         DateTime
+}
