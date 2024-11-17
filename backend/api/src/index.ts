@@ -4,9 +4,13 @@ import { userRouter } from './routers/user';
 import { adminRouter } from './routers/admin';
 import { LoginSchema, SignupSchema } from './inputSchema';
 import { AuthenticatedRequest, authenticateToken } from './middlewares/auth';
+import cors from 'cors';
 
 const app = express();
 app.use(express.json());
+app.use(cors({
+    origin: "*"
+}))
 
 app.post("/signup", async (req, res) => {
     const parsedResponse = SignupSchema.safeParse(req.body)
@@ -58,12 +62,10 @@ app.get("/me", authenticateToken, async (req: AuthenticatedRequest, res) => {
     res.json(responseFromEngine)
 })
 
-app.get("/markets", authenticateToken, async (req: AuthenticatedRequest, res) => {
+app.get("/markets", async (req, res) => {
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: 'get_all_markets',
-        payload: {
-            token: req.token!
-        }
+
     })
     res.json(responseFromEngine)
 })

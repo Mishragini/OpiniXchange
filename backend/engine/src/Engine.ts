@@ -829,7 +829,8 @@ export class Engine {
                 categoryId: db_category.id,
                 status: MarketStatus.ACTIVE,
                 lastPrice: 0,
-                totalVolume: 0
+                totalVolume: 0,
+                timestamp: new Date()
             }
             this.marketsMap.set(marketId, newMarket)
 
@@ -935,9 +936,7 @@ export class Engine {
 
     private async handleGetAllMarkets(request: any) {
         const { correlationId } = request
-        const { token } = request.payload;
         try {
-            const userId = this.verifyTokenAndGetUserId(token);
 
             const markets = Array.from(this.marketsMap.values());
 

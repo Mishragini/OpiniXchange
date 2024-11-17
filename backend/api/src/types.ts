@@ -34,9 +34,7 @@ type loginReq = {
 
 type getMarketsReq = {
     type: 'get_all_markets',
-    payload: {
-        token: string
-    }
+
 }
 
 type getMarketReq = {

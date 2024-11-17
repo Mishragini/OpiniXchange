@@ -82,6 +82,7 @@ async function main() {
                                     status: marketData.status,
                                     lastPrice: marketData.lastPrice,
                                     totalVolume: marketData.totalVolume,
+                                    timestamp: marketData.timestamp
                                 },
                             });
                         }

@@ -9,6 +9,7 @@ export interface Order {
     status: OrderStatus;
     timestamp: Date;
 }
+
 export enum OrderStatus {
     PENDING = "PENDING",
     FILLED = "FILLED",
@@ -21,8 +22,6 @@ export interface Orderbook {
         quantity: number
     }
 }
-
-
 
 export interface User {
     id: string,
@@ -44,6 +43,7 @@ export interface Market {
     lastPrice: number,
     totalVolume: number,
     resolvedOutcome?: Side
+    timestamp: Date
 }
 
 export interface Category {

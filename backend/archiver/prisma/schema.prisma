@@ -88,6 +88,7 @@ model Market {
   resolvedOutcome Side?
   Orders          Order[]
   StockBalance    StockBalance[]
+  timestamp       DateTime
 }
 
 model Order {
