@@ -160,6 +160,9 @@ export class Engine {
                 case 'get_all_markets':
                     await this.handleGetAllMarkets(request);
                     break;
+                case 'get_all_categories':
+                    await this.handleGetAllCategories(request);
+                    break;
                 case 'get_market':
                     await this.handleGetMarket(request);
                     break;
@@ -638,7 +641,10 @@ export class Engine {
             } else {
                 if (matchingResult.matches.length > 0) {
                     console.log(`when matched`)
-                    market.lastPrice = matchingResult.matches[matchingResult.matches.length - 1].price;
+                    if (buyOrder.side === Side.YES)
+                        market.lastYesPrice = matchingResult.matches[matchingResult.matches.length - 1].price;
+                    if (buyOrder.side === Side.NO)
+                        market.lastNoPrice = matchingResult.matches[matchingResult.matches.length - 1].price;
                     market.totalVolume += matchingResult.filledQty;
                     await this.sendMarketUpdate(market);
                     buyOrder.status = OrderStatus.PARTIALLY_FILLED;
@@ -827,8 +833,10 @@ export class Engine {
                 description,
                 sourceOfTruth,
                 categoryId: db_category.id,
+                categoryTitle: db_category.title,
                 status: MarketStatus.ACTIVE,
-                lastPrice: 0,
+                lastYesPrice: 0,
+                lastNoPrice: 0,
                 totalVolume: 0,
                 timestamp: new Date()
             }
@@ -934,17 +942,60 @@ export class Engine {
         }
     }
 
+    private async handleGetAllCategories(request: any) {
+        const { correlationId } = request
+        try {
+
+            const categories = Array.from(this.categoriesMap.values());
+
+            const responsePayload = {
+                type: 'get_all_categories_response',
+                data: {
+                    success: true,
+                    categories,
+                    message: "Categories retrieved successfully!"
+                }
+            };
+
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            });
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const responsePayload = {
+                type: 'get_all_categories_response',
+                data: {
+                    success: false,
+                    message: errorMessage
+                }
+            };
+
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            });
+        }
+    }
+
     private async handleGetAllMarkets(request: any) {
         const { correlationId } = request
         try {
 
-            const markets = Array.from(this.marketsMap.values());
+            const categories = Array.from(this.marketsMap.values());
 
             const responsePayload = {
-                type: 'get_all_markets_response',
+                type: 'get_all_categories_response',
                 data: {
                     success: true,
-                    markets,
+                    categories,
                     message: "Markets retrieved successfully!"
                 }
             };
@@ -960,7 +1011,7 @@ export class Engine {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             const responsePayload = {
-                type: 'get_all_markets_response',
+                type: 'get_all_categories_response',
                 data: {
                     success: false,
                     message: errorMessage
@@ -1061,6 +1112,7 @@ export class Engine {
                 data: {
                     success: true,
                     token,
+                    user: db_user,
                     message: "Logged in successfully!"
                 }
             }

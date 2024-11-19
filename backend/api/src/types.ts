@@ -36,6 +36,9 @@ type getMarketsReq = {
     type: 'get_all_markets',
 
 }
+type getCategoriesReq = {
+    type: 'get_all_categories',
+}
 
 type getMarketReq = {
     type: 'get_market',
@@ -116,4 +119,4 @@ type mintReq = {
     }
 }
 
-export type RequestPayload = signUpReq | loginReq | getMarketReq | getMarketsReq | buyReq | sellReq | getOrderbookReq | mintReq | createMarketReq | onrampInrReq | createCategoryReq | getMeReq | cancelOrderReq;
+export type RequestPayload = signUpReq | loginReq | getMarketReq | getMarketsReq | buyReq | sellReq | getOrderbookReq | mintReq | createMarketReq | onrampInrReq | createCategoryReq | getMeReq | cancelOrderReq | getCategoriesReq;

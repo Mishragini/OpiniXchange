@@ -39,8 +39,10 @@ export interface Market {
     endTime: Date,
     sourceOfTruth: string,
     categoryId: string,
+    categoryTitle: string,
     status: MarketStatus,
-    lastPrice: number,
+    lastYesPrice: number,
+    lastNoPrice: number,
     totalVolume: number,
     resolvedOutcome?: Side
     timestamp: Date

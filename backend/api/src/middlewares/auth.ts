@@ -10,11 +10,11 @@ export const authenticateToken = async (
     next: NextFunction
 ) => {
     try {
-        const token = req.headers["authorization"]?.split(' ')[1];
+        const token = req.cookies.authToken;
 
         if (!token) {
             res.status(403).json({ message: "Unauthorized" });
-            return
+            return;
         }
 
         req.token = token;

@@ -5,11 +5,14 @@ import { adminRouter } from './routers/admin';
 import { LoginSchema, SignupSchema } from './inputSchema';
 import { AuthenticatedRequest, authenticateToken } from './middlewares/auth';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 app.use(cors({
-    origin: "*"
+    origin: 'http://localhost:3001',
+    credentials: true
 }))
 
 app.post("/signup", async (req, res) => {
@@ -46,6 +49,13 @@ app.post("/login", async (req, res) => {
             password
         }
     })
+    if (responseFromEngine.data.success) {
+        res.cookie('authToken', responseFromEngine.data.token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+    }
     res.json(responseFromEngine)
 
 })
@@ -59,6 +69,13 @@ app.get("/me", authenticateToken, async (req: AuthenticatedRequest, res) => {
         }
     })
 
+    res.json(responseFromEngine)
+})
+
+app.get('/categories', async (req, res) => {
+    const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
+        type: 'get_all_categories'
+    })
     res.json(responseFromEngine)
 })
 

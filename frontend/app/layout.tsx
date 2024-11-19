@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Work_Sans } from 'next/font/google';
 import "./globals.css";
+import { MarketsProvider } from "./_components/MarketsProvider";
+import { AuthProvider } from "./_components/AuthProvider";
+import { Appbar } from "./_components/Appbar";
+import Footer from "./_components/Footer";
+import { Category } from "./dashboard/_components/Categories";
+import { CategoryProvider } from "./_components/CategoryProvider";
 
 const workSans = Work_Sans({
   subsets: ['latin'],
@@ -22,7 +28,15 @@ export default function RootLayout({
       <body
         className={`${workSans.className} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          <MarketsProvider>
+            <CategoryProvider>
+              <Appbar />
+              {children}
+              <Footer />
+            </CategoryProvider>
+          </MarketsProvider>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -33,7 +33,6 @@ export class RedisKafkaManager {
 
             await this.consumer.run({
                 eachMessage: async ({ message }) => {
-                    console.log(message, message.key, message.value?.toString())
                     if (!message.key || !message.value) return;
 
                     const correlationId = message.key.toString();
@@ -76,7 +75,6 @@ export class RedisKafkaManager {
             const correlationId = Math.random().toString(36).substring(2, 15) +
                 Math.random().toString(36).substring(2, 15);
 
-            console.log("correlationId", correlationId)
 
             const timeoutId = setTimeout(() => {
                 if (this.messageHandlers.has(correlationId)) {
