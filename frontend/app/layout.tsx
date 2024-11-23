@@ -7,6 +7,8 @@ import { Appbar } from "./_components/Appbar";
 import Footer from "./_components/Footer";
 import { Category } from "./dashboard/_components/Categories";
 import { CategoryProvider } from "./_components/CategoryProvider";
+import { WebSocketProvider } from "./dashboard/_components/WebsocketProvider";
+import { Toaster } from "@/components/ui/toaster";
 
 const workSans = Work_Sans({
   subsets: ['latin'],
@@ -28,15 +30,14 @@ export default function RootLayout({
       <body
         className={`${workSans.className} antialiased`}
       >
-        <AuthProvider>
-          <MarketsProvider>
-            <CategoryProvider>
-              <Appbar />
-              {children}
-              <Footer />
-            </CategoryProvider>
-          </MarketsProvider>
-        </AuthProvider>
+
+        <MarketsProvider>
+          {children}
+          <Toaster />
+          <Footer />
+
+        </MarketsProvider>
+
       </body>
     </html>
   );

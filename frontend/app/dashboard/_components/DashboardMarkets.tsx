@@ -5,6 +5,7 @@ import { useCategory } from "../../_components/CategoryProvider";
 import { MarketCard } from "@/app/_components/MarketCard";
 import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Empty } from '@/app/_components/Empty';
 
 export const DashboardMarkets = () => {
     const { activeCategory } = useCategory();
@@ -27,17 +28,8 @@ export const DashboardMarkets = () => {
 
     if (sortedMarkets?.length === 0) {
         return (
-            <div className="min-h-screen flex justify-center items-center">
-                <div>
-                    <Image
-                        src='/empty.png'
-                        width={300}
-                        height={300}
-                        alt="empty"
-                    />
-                    <div className="text-2xl font-bold mt-[20px] text-center">Nothing to show here... yet </div>
-                </div>
-
+            <div className='flex items-center justify-center min-h-screen'>
+                <Empty />
             </div>
         )
     }

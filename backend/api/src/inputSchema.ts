@@ -29,7 +29,7 @@ export const MarketSchema = z.object({
     symbol: z.string().min(1, "Symbol is required"),
     description: z.string().min(1, "Description is required"),
     endTime: z.string()
-        .datetime()  // This validates ISO date strings
+        .datetime() 
         .transform((str) => new Date(str)),
 
     sourceOfTruth: z.string().min(1, "Source of truth is required"),

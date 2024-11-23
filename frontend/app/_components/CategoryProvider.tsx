@@ -2,105 +2,120 @@
 
 import { createContext, Dispatch, ReactNode, SetStateAction, useCallback, useContext, useEffect, useState } from "react"
 
-interface Category {
-    id: string,
-    title: string,
-    icon: string,
-    description: string
+export interface Category {
+    id: string;
+    title: string;
+    icon: string;
+    description: string;
 }
 
-export const mockCategories: Category[] = [
-    {
-        id: '1',
-        title: 'Technology',
-        icon: '💻',
-        description: 'Latest tech news and gadgets'
-    },
-    {
-        id: '2',
-        title: 'Sports',
-        icon: '⚽',
-        description: 'Sports updates and highlights'
-    },
-    {
-        id: '3',
-        title: 'Food & Dining',
-        icon: '🍽️',
-        description: 'Restaurants and recipes'
-    },
-    {
-        id: '4',
-        title: 'Entertainment',
-        icon: '🎬',
-        description: 'Movies, TV shows, and music'
-    },
-    {
-        id: '5',
-        title: 'Travel',
-        icon: '✈️',
-        description: 'Travel guides and destinations'
-    },
-    {
-        id: '6',
-        title: 'Health',
-        icon: '💪',
-        description: 'Fitness and wellness tips'
-    }
-];
+
 
 interface CategoryContextType {
-    displayedCategories: Category[] | null,
-    isLoading: boolean,
-    activeCategory: string,
-    setActiveCategory: Dispatch<SetStateAction<string>>
+    categories: Category[];
+    isLoading: boolean;
+    activeCategory: string;
+    setActiveCategory: Dispatch<SetStateAction<string>>;
+    addCategory: (category: Omit<Category, 'id'>) => Promise<boolean>;
+    refreshCategories: () => Promise<void>;
+    error: string | null;
 }
 
-const CategoryContext = createContext<CategoryContextType | undefined>(undefined)
+const CategoryContext = createContext<CategoryContextType | undefined>(undefined);
+
 export const CategoryProvider = ({ children }: { children: ReactNode }) => {
-    const [categories, setCategories] = useState<Category[] | null>(null)
+    const [categories, setCategories] = useState<Category[]>([]);
     const [activeCategory, setActiveCategory] = useState('');
     const [isLoading, setIsLoading] = useState(true);
-
+    const [error, setError] = useState<string | null>(null);
 
     const fetchCategories = useCallback(async () => {
         try {
+            setIsLoading(true);
+            setError(null);
+
             const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/categories`, {
                 credentials: 'include',
-            })
+            });
 
             if (!response.ok) {
                 throw new Error('Failed to fetch categories');
             }
 
             const result = await response.json();
-            if (result.data.categories.length > 0)
-                setCategories(result.data.categories)
-            setCategories(mockCategories);
-
+            if (result.data.categories.length > 0) {
+                setCategories(result.data.categories);
+            }
         } catch (error) {
             console.error('Error fetching categories:', error);
-            setCategories(mockCategories);
+            setError(error instanceof Error ? error.message : 'Failed to fetch categories');
         } finally {
             setIsLoading(false);
         }
-    }, [])
+    }, []);
+
+    const addCategory = async (newCategory: Omit<Category, 'id'>): Promise<boolean> => {
+        try {
+            setError(null);
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/admin/create/category`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newCategory),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to create category');
+            }
+
+            const result = await response.json();
+
+            const createdCategory = result.data.category;
+
+            setCategories(prev => [...prev, createdCategory]);
+
+            return true;
+        } catch (error) {
+            console.error('Error creating category:', error);
+            setError(error instanceof Error ? error.message : 'Failed to create category');
+            return false;
+        }
+    };
+
+    const refreshCategories = async () => {
+        await fetchCategories();
+    };
 
     useEffect(() => {
-        fetchCategories()
-    }, [fetchCategories])
+        fetchCategories();
+    }, [fetchCategories]);
 
-    const displayedCategories = categories || mockCategories;
+
     return (
-        <CategoryContext.Provider value={{ displayedCategories, isLoading, activeCategory, setActiveCategory }}>
+        <CategoryContext.Provider
+            value={{
+                categories,
+                isLoading,
+                activeCategory,
+                setActiveCategory,
+                addCategory,
+                refreshCategories,
+                error
+            }}
+        >
             {children}
         </CategoryContext.Provider>
-    )
-}
+    );
+};
 
 export const useCategory = () => {
     const context = useContext(CategoryContext);
     if (context === undefined) {
-        throw new Error('useCategory must be used within an CategoryProvider');
+        throw new Error('useCategory must be used within a CategoryProvider');
     }
     return context;
-}
+};

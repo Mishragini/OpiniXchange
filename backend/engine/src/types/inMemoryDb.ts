@@ -45,7 +45,8 @@ export interface Market {
     lastNoPrice: number,
     totalVolume: number,
     resolvedOutcome?: Side
-    timestamp: Date
+    timestamp: Date,
+    createdBy: String
 }
 
 export interface Category {

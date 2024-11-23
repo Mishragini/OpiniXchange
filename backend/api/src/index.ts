@@ -60,6 +60,19 @@ app.post("/login", async (req, res) => {
 
 })
 
+app.post("/logout", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+        res.clearCookie('authToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production'
+        });
+
+        res.json({ success: true, message: 'Logged out successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Logout failed' });
+    }
+});
+
 app.get("/me", authenticateToken, async (req: AuthenticatedRequest, res) => {
 
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
@@ -87,7 +100,7 @@ app.get("/markets", async (req, res) => {
     res.json(responseFromEngine)
 })
 
-app.get("/market/:marketSymbol", authenticateToken, async (req: AuthenticatedRequest, res) => {
+app.get("/market/:marketSymbol", async (req: AuthenticatedRequest, res) => {
     const marketSymbol = req.params.marketSymbol;
 
     if (!marketSymbol) {
@@ -98,7 +111,6 @@ app.get("/market/:marketSymbol", authenticateToken, async (req: AuthenticatedReq
     const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
         type: "get_market",
         payload: {
-            token: req.token!,
             marketSymbol
         }
     })

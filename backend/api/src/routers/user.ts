@@ -100,3 +100,15 @@ userRouter.post("/cancel/sell", authenticateToken, async (req: AuthenticatedRequ
 
     res.json(responseFromEngine)
 })
+
+userRouter.get('/:marketSymbol/orders', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    const marketSymbol = req.params.marketSymbol;
+    const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
+        type: "get_user_market_orders",
+        payload: {
+            token: req.token!,
+            marketSymbol
+        }
+    })
+    res.json(responseFromEngine);
+})

@@ -5,7 +5,7 @@ import { useCategory } from "../../_components/CategoryProvider";
 
 
 export const Category = () => {
-    const { isLoading, displayedCategories, setActiveCategory, activeCategory } = useCategory()
+    const { isLoading, categories, setActiveCategory, activeCategory } = useCategory()
 
     if (isLoading) {
         return null;
@@ -23,7 +23,7 @@ export const Category = () => {
             >
                 <span>All Events</span>
             </div>
-            {displayedCategories?.map((category, index) => (
+            {categories?.map((category, index) => (
                 <div
                     key={category.id}
                     onClick={() => setActiveCategory(category.title)}
@@ -33,7 +33,6 @@ export const Category = () => {
                             : "text-gray-700"
                         } cursor-pointer`}
                 >
-                    <span>{category.icon}</span>
                     <span>{category.title}</span>
                 </div>
             ))}

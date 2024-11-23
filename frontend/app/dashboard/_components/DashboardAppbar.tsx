@@ -1,9 +1,11 @@
 'use client';
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
+import DashboardAppbarButtons from "./DashboardAppbarButtons";
+import { Category } from "./Categories";
 
-export const Appbar = () => {
-
+export const DashboardAppbar = () => {
+    const pathname = usePathname()
     const router = useRouter()
     return (
         <div className="fixed top-0 left-0 right-0 bg-[#f5f5f5] z-50 px-10 lg:px-48">
@@ -18,10 +20,9 @@ export const Appbar = () => {
                         className="cursor-pointer"
                         onClick={() => { router.push('/') }}
                     />
-
-                    <button onClick={() => { router.push('/dashboard') }} className="bg-black text-white py-1 px-3 text-base font-medium hover:bg-white hover:text-black border-2 border-black hidden md:block">Trade Online</button>
-
+                    <DashboardAppbarButtons />
                 </div>
+                {pathname === '/dashboard' && <Category />}
 
             </div>
         </div>

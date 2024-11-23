@@ -37,16 +37,18 @@ class WSServer {
             this.clients.add(ws);
 
             ws.on('message', (message: string) => {
+                console.log(`inside on message`, message)
                 try {
                     console.log(message);
                     const data = JSON.parse(message);
                     console.log(data)
                     if (data.type === 'subscribe') {
-                        console.log('subscribing')
+                        console.log('subscribing', data.marketSymbol)
                         ws.subscribedMarkets.add(data.marketSymbol)
                         console.log('subscribed')
 
                     } else if (data.type === 'unsubscribe') {
+                        console.log('unsubscribing', data.marketSymbol)
                         ws.subscribedMarkets.delete(data.marketSymbol)
                     }
                 } catch (error) {
@@ -55,6 +57,7 @@ class WSServer {
             })
 
             ws.on('close', () => {
+                console.log('client disconnected');
                 this.clients.delete(ws)
             })
 
@@ -64,7 +67,7 @@ class WSServer {
 
         await this.consumer.run({
             eachMessage: async ({ topic, message }) => {
-                console.log("topic",topic)
+                console.log("topic", topic)
                 console.log(`inside consumer`)
                 if (!message.value || !message.key) return;
                 const data = JSON.parse(message.value.toString());

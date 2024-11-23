@@ -99,8 +99,8 @@ export class Engine {
     private createOrderbookData(symbol: string) {
         const sellOrders = this.sellOrders.get(symbol) || [];
 
-        const yesOrders = sellOrders.filter(order => order.side === Side.YES);
-        const noOrders = sellOrders.filter(order => order.side === Side.NO);
+        const yesOrders = sellOrders.filter(order => order.side === Side.YES && order.status !== OrderStatus.CANCELLED && order.status !== OrderStatus.FILLED);
+        const noOrders = sellOrders.filter(order => order.side === Side.NO && order.status !== OrderStatus.CANCELLED && order.status !== OrderStatus.FILLED);
 
         const yesOrderBook: Orderbook = {};
         const noOrderBook: Orderbook = {};
@@ -196,6 +196,9 @@ export class Engine {
                 case 'cancel_sell_order':
                     await this.handleCancelSellOrder(request);
                     break;
+                case 'get_user_market_orders':
+                    await this.handleGetUserOrders(request);
+                    break;
                 default:
                     throw new Error(`Unsupported request type: ${(request as any).type}`);
             }
@@ -203,6 +206,53 @@ export class Engine {
         } catch (error) {
             console.error('Error processing request:', error);
             throw error;
+        }
+    }
+
+    private async handleGetUserOrders(request: any) {
+        const { correlationId } = request;
+        const { token, marketSymbol } = request.payload;
+
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+
+            const userBuyMarketOrders = this.buyOrders.get(marketSymbol)?.filter(order => order.userId === userId);
+
+
+
+            const userSellMarketOrders = this.sellOrders.get(marketSymbol)?.filter(order => order.userId === userId);
+
+            const responsePayload = {
+                type: "get_user_market_orders_response",
+                data: {
+                    success: true,
+                    userBuyMarketOrders,
+                    userSellMarketOrders,
+                    message: 'Orders fetched successfully'
+                }
+            }
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        } catch (error) {
+            const responsePayload = {
+                type: "get_user_market_orders_response",
+                data: {
+                    success: false,
+                    message: 'Failed to fetch orders.'
+                }
+            }
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
         }
     }
 
@@ -228,8 +278,6 @@ export class Engine {
 
             orderToCancel.status = OrderStatus.CANCELLED;
 
-            const currentOrders = this.buyOrders.get(marketSymbol)?.filter(order => order.id !== orderId) || []
-            this.buyOrders.set(marketSymbol, currentOrders);
             const responsePayload = {
                 type: 'cancel_buy_order_response',
                 data: {
@@ -290,9 +338,6 @@ export class Engine {
             user.balance.stocks[marketSymbol as string][orderToCancel.side as Side]!.locked -= refund;
 
             orderToCancel.status = OrderStatus.CANCELLED;
-
-            const currentOrders = this.sellOrders.get(marketSymbol)?.filter(order => order.id !== orderId) || []
-            this.sellOrders.set(marketSymbol, currentOrders);
 
             await this.sendOrderbookUpdate(marketSymbol)
             const responsePayload = {
@@ -396,6 +441,25 @@ export class Engine {
                 throw new Error("seller not found in the database");
             }
 
+            if (!seller.balance.stocks) {
+                seller.balance.stocks = {};
+            }
+
+            if (!seller.balance.stocks[symbol]) {
+                seller.balance.stocks[symbol] = {};
+            }
+
+            const stockBalance = seller.balance.stocks[symbol];
+            const stockTypeKey = stockType as Side;
+
+            if (!stockBalance[stockTypeKey]) {
+                stockBalance[stockTypeKey] = {
+                    quantity: 0,
+                    locked: 0
+                };
+            }
+
+
             const market = Array.from(this.marketsMap.values()).find(m => m.symbol === symbol && m.status === MarketStatus.ACTIVE)
 
             if (!market) {
@@ -443,7 +507,13 @@ export class Engine {
                 const matchPrice = buyOrder.price;
 
                 sellOrder.remainingQty -= matchedQuantity;
+
                 buyOrder.remainingQty -= matchedQuantity;
+                if (buyOrder.remainingQty === 0) {
+                    buyOrder.status = OrderStatus.FILLED;
+                } else {
+                    buyOrder.status = OrderStatus.PARTIALLY_FILLED;
+                }
 
                 const buyer = this.usersMap.get(buyOrder.userId);
                 if (!buyer) {
@@ -473,9 +543,6 @@ export class Engine {
 
                 if (buyOrder.remainingQty === 0) {
                     buyOrder.status = OrderStatus.FILLED;
-                    this.buyOrders.set(symbol,
-                        buyOrders.filter(order => order.id !== sellOrder.id)
-                    );
                 } else {
                     buyOrder.status = OrderStatus.PARTIALLY_FILLED
                 }
@@ -594,6 +661,11 @@ export class Engine {
                 const matchPrice = sellOrder.price;
 
                 sellOrder.remainingQty -= matchedQuantity;
+                if (sellOrder.remainingQty === 0) {
+                    sellOrder.status = OrderStatus.FILLED;
+                } else {
+                    sellOrder.status = OrderStatus.PARTIALLY_FILLED;
+                }
                 buyOrder.remainingQty -= matchedQuantity;
 
                 const seller = this.usersMap.get(sellOrder.userId);
@@ -627,17 +699,15 @@ export class Engine {
 
                 if (sellOrder.remainingQty === 0) {
                     sellOrder.status = OrderStatus.FILLED;
-                    this.sellOrders.set(symbol,
-                        sellOrders.filter(order => order.id !== sellOrder.id)
-                    );
                 } else {
                     sellOrder.status = OrderStatus.PARTIALLY_FILLED;
                 }
             }
             if (buyOrder.remainingQty === 0) {
                 buyOrder.status = OrderStatus.FILLED;
-                user.balance.INR.available = requiredFunds - matchingResult.totalValue;
+                user.balance.INR.available += requiredFunds - matchingResult.totalValue;
                 user.balance.INR.locked = 0;
+                await this.sendOrderbookUpdate(symbol);
             } else {
                 if (matchingResult.matches.length > 0) {
                     console.log(`when matched`)
@@ -647,13 +717,16 @@ export class Engine {
                         market.lastNoPrice = matchingResult.matches[matchingResult.matches.length - 1].price;
                     market.totalVolume += matchingResult.filledQty;
                     await this.sendMarketUpdate(market);
+                    await this.sendOrderbookUpdate(symbol);
+
                     buyOrder.status = OrderStatus.PARTIALLY_FILLED;
                 }
-                const existingBuyOrders = this.buyOrders.get(symbol) || [];
-                existingBuyOrders.push(buyOrder);
-                this.buyOrders.set(symbol, existingBuyOrders);
-
             }
+            const existingBuyOrders = this.buyOrders.get(symbol) || [];
+            existingBuyOrders.push(buyOrder);
+            this.buyOrders.set(symbol, existingBuyOrders);
+            const message = (matchingResult.matches.length === 0) ? "Buy order placed"
+                : (buyOrder.remainingQty === 0) ? "Buy order completed" : `Buy order partially filled and order placed for ${buyOrder.remainingQty}`
             const responsePayload = {
                 type: 'buy_response',
                 data: {
@@ -661,7 +734,8 @@ export class Engine {
                     buyOrder,
                     buyer: user,
                     totalValue: matchingResult.totalValue / 100,
-                    matches: matchingResult.matches
+                    matches: matchingResult.matches,
+                    message
                 }
             };
 
@@ -835,8 +909,9 @@ export class Engine {
                 categoryId: db_category.id,
                 categoryTitle: db_category.title,
                 status: MarketStatus.ACTIVE,
-                lastYesPrice: 0,
-                lastNoPrice: 0,
+                createdBy: userId,
+                lastYesPrice: 5,
+                lastNoPrice: 5,
                 totalVolume: 0,
                 timestamp: new Date()
             }
@@ -880,10 +955,9 @@ export class Engine {
 
     private async handleGetMarket(request: any) {
         const { correlationId } = request;
-        const { token, marketSymbol } = request.payload;
+        const { marketSymbol } = request.payload;
 
         try {
-            const userId = this.verifyTokenAndGetUserId(token);
             const market = Array.from(this.marketsMap.values()).find(m => m.symbol === marketSymbol);
 
             if (!market) {
@@ -989,13 +1063,13 @@ export class Engine {
         const { correlationId } = request
         try {
 
-            const categories = Array.from(this.marketsMap.values());
+            const markets = Array.from(this.marketsMap.values());
 
             const responsePayload = {
-                type: 'get_all_categories_response',
+                type: 'get_all_markets_response',
                 data: {
                     success: true,
-                    categories,
+                    markets,
                     message: "Markets retrieved successfully!"
                 }
             };
@@ -1220,7 +1294,7 @@ export class Engine {
             }
             user.balance.stocks[symbol].YES!.quantity += quantity;
             user.balance.stocks[symbol].NO!.quantity += quantity;
-            user.balance.INR.locked = 0;
+            user.balance.INR.locked -= totalCost;
 
             const responsePayload = {
                 type: 'mint_response',

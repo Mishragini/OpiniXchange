@@ -29,23 +29,23 @@ export const LoginDialog: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [showPassword, setShowPassword] = useState<boolean>(false);
     const [serverError, setServerError] = useState<string>('');
-    const { setUser } = useAuth()
-   
+    const { setUser, setBalance, setStocks } = useAuth()
+
 
     const validateEmail = (email: string): boolean => {
         const emailRegex: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     };
 
-    const validatePassword = (password: string): boolean => {
-        const hasMinLength: boolean = password.length >= 8;
-        const hasUpperCase: boolean = /[A-Z]/.test(password);
-        const hasLowerCase: boolean = /[a-z]/.test(password);
-        const hasNumber: boolean = /\d/.test(password);
-        const hasSpecialChar: boolean = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    // const validatePassword = (password: string): boolean => {
+    //     const hasMinLength: boolean = password.length >= 8;
+    //     const hasUpperCase: boolean = /[A-Z]/.test(password);
+    //     const hasLowerCase: boolean = /[a-z]/.test(password);
+    //     const hasNumber: boolean = /\d/.test(password);
+    //     const hasSpecialChar: boolean = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
-        return hasMinLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar;
-    };
+    //     return hasMinLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar;
+    // };
 
     const validateForm = (): boolean => {
         const newErrors: FormErrors = {};
@@ -58,9 +58,10 @@ export const LoginDialog: React.FC = () => {
 
         if (!password) {
             newErrors.password = 'Password is required';
-        } else if (!validatePassword(password)) {
-            newErrors.password = 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character';
         }
+        // } else if (!validatePassword(password)) {
+        //     newErrors.password = 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character';
+        // }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -97,6 +98,8 @@ export const LoginDialog: React.FC = () => {
             }
 
             setUser(result.data.user);
+            setBalance(result.data.user.balance.INR);
+            setStocks(result.data.user.balance.stocks);
             setEmail('');
             setPassword('');
             setOpen(false);
