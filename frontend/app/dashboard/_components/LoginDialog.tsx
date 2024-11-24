@@ -37,16 +37,6 @@ export const LoginDialog: React.FC = () => {
         return emailRegex.test(email);
     };
 
-    // const validatePassword = (password: string): boolean => {
-    //     const hasMinLength: boolean = password.length >= 8;
-    //     const hasUpperCase: boolean = /[A-Z]/.test(password);
-    //     const hasLowerCase: boolean = /[a-z]/.test(password);
-    //     const hasNumber: boolean = /\d/.test(password);
-    //     const hasSpecialChar: boolean = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-
-    //     return hasMinLength && hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar;
-    // };
-
     const validateForm = (): boolean => {
         const newErrors: FormErrors = {};
 
@@ -59,9 +49,7 @@ export const LoginDialog: React.FC = () => {
         if (!password) {
             newErrors.password = 'Password is required';
         }
-        // } else if (!validatePassword(password)) {
-        //     newErrors.password = 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character';
-        // }
+       
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;

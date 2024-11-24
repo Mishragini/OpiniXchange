@@ -1,5 +1,5 @@
 import { KafkaManager } from "./kafkaManager";
-import { Category, Market, MarketStatus, Order, Orderbook, OrderStatus, Side, User } from "./types/inMemoryDb";
+import { Category, Market, MarketStatus, Order, Orderbook, OrderStatus, Side, Trade, User } from "./types/inMemoryDb";
 import { v4 as uuidv4 } from 'uuid';
 import * as bcrypt from 'bcrypt'
 import * as jwt from 'jsonwebtoken'
@@ -13,6 +13,7 @@ export class Engine {
     private categoriesMap: Map<string, Category>
     private buyOrders: Map<string, Order[]>;
     private sellOrders: Map<string, Order[]>;
+    private tradeHistory: Map<string, Trade[]>;
 
     private constructor() {
         this.usersMap = new Map()
@@ -20,6 +21,7 @@ export class Engine {
         this.categoriesMap = new Map()
         this.buyOrders = new Map()
         this.sellOrders = new Map()
+        this.tradeHistory = new Map()
     }
 
     public static getInstance() {
@@ -72,24 +74,49 @@ export class Engine {
         return category;
     }
 
-    private async sendMarketUpdate(market: Market) {
-        console.log(`inside sendMarketUpdate`)
-        const category = this.categoriesMap.get(market.categoryId);
+    private async sendTradeUpdate(matches: Array<{ seller: string, buyer: string, quantity: number, price: number, side: Side }>, marketSymbol: string) {
+        console.log(`inside sendTradeUpdate`)
+
+        const newTrades = matches.map(match => ({
+            seller: match.seller,
+            buyer: match.buyer,
+            quantity: match.quantity,
+            price: match.price,
+            side: match.side,
+            timestamp: new Date().toISOString(),
+            marketSymbol
+        }));
+        let trades = this.tradeHistory.get(marketSymbol) || [];
+
+        for (const trade of newTrades) {
+            if (trades.length >= 10) {
+                trades.shift();
+            }
+            trades.push(trade);
+        }
+
+        this.tradeHistory.set(marketSymbol, trades);
+
+        const currentTrades = this.tradeHistory.get(marketSymbol)
 
         const marketUpdate = {
-            type: 'market_update',
-            marketSymbol: market.symbol,
+            type: 'trade_update',
+            marketSymbol: marketSymbol,
             data: {
-                status: market.status,
-                lastPrice: market.status,
-                totalVolume: market.totalVolume,
-                category
+                trades: currentTrades,
+                lastTrade: {
+                    price: matches[matches.length - 1].price,
+                    quantity: matches[matches.length - 1].quantity,
+                    timestamp: new Date().toISOString()
+                },
+                tradeCount: matches.length
             }
-        }
+        };
+
         await KafkaManager.getInstance().sendToKafkaStream({
             topic: 'market-updates',
             messages: [{
-                key: market.symbol,
+                key: marketSymbol,
                 value: JSON.stringify(marketUpdate)
             }]
         })
@@ -199,6 +226,9 @@ export class Engine {
                 case 'get_user_market_orders':
                     await this.handleGetUserOrders(request);
                     break;
+                case 'get_market_trades':
+                    await this.handleGetMarketTrades(request);
+                    break;
                 default:
                     throw new Error(`Unsupported request type: ${(request as any).type}`);
             }
@@ -206,6 +236,55 @@ export class Engine {
         } catch (error) {
             console.error('Error processing request:', error);
             throw error;
+        }
+    }
+
+    private async handleGetMarketTrades(request: any) {
+        const { correlationId } = request;
+        const { token, marketSymbol } = request.payload;
+        try {
+            const userId = this.verifyTokenAndGetUserId(token);
+            const user = this.usersMap.get(userId);
+            if (!userId || !user) {
+                throw new Error("Unauthorized")
+            }
+            const trades = this.tradeHistory.get(marketSymbol);
+
+            if (!trades) {
+                throw new Error('No trades found')
+            }
+
+            const responsePayload = {
+                type: 'get_market_trades_response',
+                data: {
+                    success: true,
+                    trades
+                }
+            }
+
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to fetch trades.'
+            const responsePayload = {
+                type: "get_market_trades_response",
+                data: {
+                    success: false,
+                    message: errorMessage
+                }
+            }
+            await KafkaManager.getInstance().sendToKafkaStream({
+                topic: 'responses',
+                messages: [{
+                    key: correlationId,
+                    value: JSON.stringify(responsePayload)
+                }]
+            })
         }
     }
 
@@ -217,8 +296,6 @@ export class Engine {
             const userId = this.verifyTokenAndGetUserId(token);
 
             const userBuyMarketOrders = this.buyOrders.get(marketSymbol)?.filter(order => order.userId === userId);
-
-
 
             const userSellMarketOrders = this.sellOrders.get(marketSymbol)?.filter(order => order.userId === userId);
 
@@ -489,7 +566,7 @@ export class Engine {
             let matchingResult = {
                 filledQty: 0,
                 totalValue: 0,
-                matches: [] as Array<{ quantity: number, price: number }>
+                matches: [] as Array<{ seller: string, buyer: string, quantity: number, price: number, side: Side }>
             }
 
             const buyOrders = this.buyOrders.get(symbol) || [];
@@ -539,13 +616,17 @@ export class Engine {
 
                 matchingResult.filledQty += matchedQuantity;
                 matchingResult.totalValue += matchValue;
-                matchingResult.matches.push({ quantity: matchedQuantity, price: matchPrice / 100 });
+                matchingResult.matches.push({ seller: seller.username, buyer: buyer.username, quantity: matchedQuantity, price: matchPrice / 100, side: stockType });
 
                 if (buyOrder.remainingQty === 0) {
                     buyOrder.status = OrderStatus.FILLED;
                 } else {
                     buyOrder.status = OrderStatus.PARTIALLY_FILLED
                 }
+            }
+            if (matchingResult.matches.length > 0) {
+                this.sendTradeUpdate(matchingResult.matches, market.symbol)
+
             }
 
             if (sellOrder.remainingQty === 0) {
@@ -642,7 +723,7 @@ export class Engine {
             let matchingResult = {
                 filledQty: 0,
                 totalValue: 0,
-                matches: [] as Array<{ quantity: number, price: number }>
+                matches: [] as Array<{ seller: string, buyer: string, quantity: number, price: number, side: Side }>
             }
 
             const sellOrders = this.sellOrders.get(symbol) || [];
@@ -695,7 +776,7 @@ export class Engine {
 
                 matchingResult.filledQty += matchedQuantity;
                 matchingResult.totalValue += matchValue;
-                matchingResult.matches.push({ quantity: matchedQuantity, price: matchPrice / 100 })
+                matchingResult.matches.push({ seller: seller.username, buyer: user.username, quantity: matchedQuantity, price: matchPrice / 100, side: stockType })
 
                 if (sellOrder.remainingQty === 0) {
                     sellOrder.status = OrderStatus.FILLED;
@@ -703,11 +784,15 @@ export class Engine {
                     sellOrder.status = OrderStatus.PARTIALLY_FILLED;
                 }
             }
+            if (matchingResult.matches.length > 0) {
+                await this.sendTradeUpdate(matchingResult.matches, market.symbol);
+                await this.sendOrderbookUpdate(symbol);
+            }
             if (buyOrder.remainingQty === 0) {
                 buyOrder.status = OrderStatus.FILLED;
                 user.balance.INR.available += requiredFunds - matchingResult.totalValue;
                 user.balance.INR.locked = 0;
-                await this.sendOrderbookUpdate(symbol);
+
             } else {
                 if (matchingResult.matches.length > 0) {
                     console.log(`when matched`)
@@ -716,8 +801,6 @@ export class Engine {
                     if (buyOrder.side === Side.NO)
                         market.lastNoPrice = matchingResult.matches[matchingResult.matches.length - 1].price;
                     market.totalVolume += matchingResult.filledQty;
-                    await this.sendMarketUpdate(market);
-                    await this.sendOrderbookUpdate(symbol);
 
                     buyOrder.status = OrderStatus.PARTIALLY_FILLED;
                 }

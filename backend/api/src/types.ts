@@ -126,4 +126,12 @@ type getYourOrdersReq = {
     }
 }
 
-export type RequestPayload = getYourOrdersReq | signUpReq | loginReq | getMarketReq | getMarketsReq | buyReq | sellReq | getOrderbookReq | mintReq | createMarketReq | onrampInrReq | createCategoryReq | getMeReq | cancelOrderReq | getCategoriesReq;
+type getTradesReq = {
+    type: "get_market_trades",
+    payload: {
+        token: string,
+        marketSymbol: string
+    }
+}
+
+export type RequestPayload = getTradesReq | getYourOrdersReq | signUpReq | loginReq | getMarketReq | getMarketsReq | buyReq | sellReq | getOrderbookReq | mintReq | createMarketReq | onrampInrReq | createCategoryReq | getMeReq | cancelOrderReq | getCategoriesReq;

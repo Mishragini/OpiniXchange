@@ -86,3 +86,13 @@ export enum MarketStatus {
     CLOSED = "CLOSED",
     RESOLVED = "RESOLVED"
 }
+
+export interface Trade {
+    seller: string;
+    buyer: string;
+    quantity: number;
+    price: number;
+    timestamp: string;
+    marketSymbol: string;
+}
+

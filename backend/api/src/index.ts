@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { response } from 'express'
 import { RedisKafkaManager } from './redisKafkaManager';
 import { userRouter } from './routers/user';
 import { adminRouter } from './routers/admin';
@@ -98,6 +98,19 @@ app.get("/markets", async (req, res) => {
 
     })
     res.json(responseFromEngine)
+})
+
+app.get('/trades/:marketSymbol', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    const marketSymbol = req.params.marketSymbol;
+    const responseFromEngine = await RedisKafkaManager.getInstance().sendAndAwait({
+        type: 'get_market_trades',
+        payload: {
+            marketSymbol,
+            token: req.token!
+        }
+    })
+
+    res.json(responseFromEngine);
 })
 
 app.get("/market/:marketSymbol", async (req: AuthenticatedRequest, res) => {

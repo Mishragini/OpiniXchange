@@ -1,4 +1,3 @@
-// _components/WebsocketProvider.tsx
 import { useAuth } from '@/app/_components/AuthProvider';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 

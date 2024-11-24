@@ -2,7 +2,6 @@
 
 import React, { use, useCallback, useEffect, useState } from 'react';
 import { Market } from "@/app/_components/MarketsProvider";
-import OrderbookCard from "./_components/OrderbookCard";
 import { useWebSocket } from "../../_components/WebsocketProvider";
 import PlaceOrderCard from './_components/PlaceOrderCard';
 import { Orders } from '../../_components/Orders';
@@ -11,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, Timer, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/app/_components/AuthProvider';
 import { OrdersProvider } from './_components/OrdersProvider';
+import MarketCard from './_components/MarketCard';
 
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -173,7 +173,7 @@ export default function Page({ params }: {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2">
-                        <OrderbookCard marketSymbol={marketSymbol} />
+                        <MarketCard marketSymbol={marketSymbol} />
                     </div>
                     <div>
                         <PlaceOrderCard

@@ -48,11 +48,9 @@ const PlaceOrderCard = ({ lastYesPrice, lastNoPrice, marketSymbol }: { lastYesPr
                     setAllBuyOrders((prev) => prev ? [...prev, result.data.buyOrder] : [result.data.buyOrder]);
                 }
 
-                // When updating sell orders
                 if (result.data.sellOrder) {
                     setAllSellOrders((prev) => prev ? [...prev, result.data.sellOrder] : [result.data.sellOrder]);
                 }
-                // fetchOrders();
                 return;
             }
             toast({
