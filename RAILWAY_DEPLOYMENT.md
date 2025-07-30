@@ -3,6 +3,7 @@
 ## 🚀 Quick Deploy to Railway
 
 ### Step 1: Prepare Your Repository
+
 Your project is already on GitHub at: `https://github.com/Mishragini/OpiniXchange.git`
 
 ### Step 2: Deploy to Railway
@@ -29,7 +30,7 @@ REDIS_URL=redis://...
 KAFKA_BROKERS=kafka:9092
 
 # Frontend URLs (Update with your Railway URLs)
-NEXT_PUBLIC_API_URL=https://your-api-service.railway.app
+NEXT_PUBLIC_BACKEND_URL=https://reasonable-connection-production.up.railway.app
 NEXT_PUBLIC_WS_URL=wss://your-websocket-service.railway.app
 
 # Security (Generate new ones for production)
@@ -45,6 +46,7 @@ NODE_ENV=production
 After the frontend is deployed, you'll need to deploy the backend services:
 
 1. **Deploy API Service:**
+
    - In your Railway project, click "New Service"
    - Select "GitHub Repo"
    - Choose the same repository
@@ -52,10 +54,12 @@ After the frontend is deployed, you'll need to deploy the backend services:
    - Railway will create a new service for your API
 
 2. **Deploy WebSocket Service:**
+
    - Repeat the process for `backend/websocket`
    - Set the port to 8080
 
 3. **Deploy Engine Service:**
+
    - Repeat for `backend/engine`
 
 4. **Deploy Archiver Service:**
@@ -64,6 +68,7 @@ After the frontend is deployed, you'll need to deploy the backend services:
 ### Step 5: Add Managed Services (Optional but Recommended)
 
 1. **Add PostgreSQL Database:**
+
    - Go to your Railway project
    - Click "New" → "Database" → "PostgreSQL"
    - Railway will automatically provide the `DATABASE_URL`
@@ -84,10 +89,12 @@ After the frontend is deployed, you'll need to deploy the backend services:
 ### Common Issues:
 
 1. **Build Failures:**
+
    - Check the build logs in Railway dashboard
    - Ensure all Dockerfiles are properly configured
 
 2. **Service Dependencies:**
+
    - Make sure all services are starting in the correct order
    - Check the `depends_on` configurations
 
@@ -111,6 +118,7 @@ railway up
 ## 🌐 Accessing Your Application
 
 After successful deployment, Railway will provide you with:
+
 - **Frontend URL**: `https://your-frontend-service.railway.app`
 - **API URL**: `https://your-api-service.railway.app`
 - **WebSocket URL**: `https://your-websocket-service.railway.app`
@@ -118,6 +126,7 @@ After successful deployment, Railway will provide you with:
 ## 📊 Monitoring
 
 Railway provides:
+
 - ✅ Real-time logs
 - ✅ Service health monitoring
 - ✅ Automatic restarts
@@ -126,6 +135,7 @@ Railway provides:
 ## 🔄 Updates
 
 To update your application:
+
 1. **Push changes** to your GitHub repository
 2. **Railway will automatically redeploy** the changes
 3. **Monitor the deployment** in the dashboard
@@ -133,6 +143,7 @@ To update your application:
 ## 💰 Costs
 
 Railway pricing:
+
 - **Free tier**: $5 credit monthly
 - **Paid plans**: Pay for what you use
 - **Database costs**: Separate from compute costs
@@ -141,4 +152,4 @@ Railway pricing:
 
 - **Railway Docs**: [docs.railway.app](https://docs.railway.app)
 - **Railway Discord**: [discord.gg/railway](https://discord.gg/railway)
-- **GitHub Issues**: For project-specific issues 
+- **GitHub Issues**: For project-specific issues
