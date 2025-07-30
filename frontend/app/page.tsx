@@ -4,6 +4,7 @@ import { VideoCarousel } from "./_components/VideoCarousel";
 import { RecentMarkets } from "./_components/RecentMarkets";
 import { Usp } from "./_components/Usp";
 import { Return } from "./_components/Return";
+import { DebugEnv } from "./_components/DebugEnv";
 
 export default function Home() {
   return (
@@ -15,6 +16,7 @@ export default function Home() {
         <RecentMarkets />
         <Usp />
         <Return />
+        <DebugEnv />
       </main>
     </div>
   );
