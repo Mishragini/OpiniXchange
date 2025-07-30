@@ -16,7 +16,7 @@ class WSServer {
 
         const kafka = new Kafka({
             clientId: 'ws-server',
-            brokers: ["kafka:9092"]
+            brokers: [process.env.KAFKA_BROKERS || "kafka:9092"]
         })
 
         this.consumer = kafka.consumer({ groupId: "websocker-server-group" })

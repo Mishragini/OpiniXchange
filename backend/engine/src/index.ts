@@ -4,10 +4,7 @@ import { Engine } from "./Engine"
 
 async function main() {
     const queueClient = createClient({
-        socket: {
-            host: 'redis',
-            port: 6379,
-        },
+        url: process.env.REDIS_URL || 'redis://redis:6379',
     });
 
     queueClient.on('error', (err) => {

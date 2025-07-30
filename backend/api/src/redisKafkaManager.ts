@@ -13,14 +13,11 @@ export class RedisKafkaManager {
     private constructor() {
         this.kafka = new Kafka({
             clientId: 'api-server',
-            brokers: ["kafka:9092"]
+            brokers: [process.env.KAFKA_BROKERS || "kafka:9092"]
         });
 
         this.queue = createClient({
-            socket: {
-                host: 'redis',
-                port: 6379,
-            },
+            url: process.env.REDIS_URL || 'redis://redis:6379',
         });
         this.consumer = this.kafka.consumer({ groupId: 'api-server-group' });
         this.messageHandlers = new Map();
