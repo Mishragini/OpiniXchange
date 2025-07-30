@@ -1,23 +1,23 @@
-# Use a base image with Docker and Docker Compose
-FROM docker/compose:1.29.2
-
-# Install Node.js and npm
-RUN apk add --no-cache nodejs npm
+# Use the official Node.js runtime as the base image
+FROM node:18-alpine
 
 # Set the working directory
 WORKDIR /app
 
-# Copy the docker-compose file first
-COPY docker-compose.yml .
+# Copy package files
+COPY frontend/package*.json ./
 
-# Copy the entire project
-COPY . .
+# Install dependencies
+RUN npm install
 
-# Create necessary directories
-RUN mkdir -p postgres-data redis-data
+# Copy the frontend source code
+COPY frontend/ .
 
-# Expose the main ports
-EXPOSE 3000 3001 8080
+# Build the application
+RUN npm run build
+
+# Expose the port
+EXPOSE 3000
 
 # Start the application
-CMD ["docker-compose", "up", "-d"] 
+CMD ["npm", "start"] 

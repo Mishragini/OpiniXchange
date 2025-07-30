@@ -12,7 +12,7 @@ Your project is already on GitHub at: `https://github.com/Mishragini/OpiniXchang
 3. **Click "New Project"**
 4. **Select "Deploy from GitHub repo"**
 5. **Choose your repository**: `Mishragini/OpiniXchange`
-6. **Railway will automatically detect** your `docker-compose.yml`
+6. **Railway will use the Dockerfile** to deploy your frontend service
 
 ### Step 3: Configure Environment Variables
 
@@ -40,7 +40,28 @@ SESSION_SECRET=your-session-secret-change-this
 NODE_ENV=production
 ```
 
-### Step 4: Add Managed Services (Optional but Recommended)
+### Step 4: Deploy Backend Services
+
+After the frontend is deployed, you'll need to deploy the backend services:
+
+1. **Deploy API Service:**
+   - In your Railway project, click "New Service"
+   - Select "GitHub Repo"
+   - Choose the same repository
+   - Set the source directory to `backend/api`
+   - Railway will create a new service for your API
+
+2. **Deploy WebSocket Service:**
+   - Repeat the process for `backend/websocket`
+   - Set the port to 8080
+
+3. **Deploy Engine Service:**
+   - Repeat for `backend/engine`
+
+4. **Deploy Archiver Service:**
+   - Repeat for `backend/archiver`
+
+### Step 5: Add Managed Services (Optional but Recommended)
 
 1. **Add PostgreSQL Database:**
    - Go to your Railway project
