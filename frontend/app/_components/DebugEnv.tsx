@@ -1,9 +1,11 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
 export const DebugEnv = () => {
-  const [envVars, setEnvVars] = useState<any>({})
+  const [envVars, setEnvVars] = useState<Record<string, string | undefined>>(
+    {}
+  );
 
   useEffect(() => {
     // Check environment variables
@@ -11,13 +13,13 @@ export const DebugEnv = () => {
       NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
       NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
       NODE_ENV: process.env.NODE_ENV,
-    }
-    setEnvVars(vars)
-    console.log('Environment Variables:', vars)
-  }, [])
+    };
+    setEnvVars(vars);
+    console.log("Environment Variables:", vars);
+  }, []);
 
-  if (process.env.NODE_ENV === 'production') {
-    return null // Don't show in production
+  if (process.env.NODE_ENV === "production") {
+    return null; // Don't show in production
   }
 
   return (
@@ -27,5 +29,5 @@ export const DebugEnv = () => {
         {JSON.stringify(envVars, null, 2)}
       </pre>
     </div>
-  )
-} 
+  );
+};
