@@ -8,15 +8,21 @@ export class RedisKafkaManager {
     private consumer: Consumer;
     private messageHandlers: Map<string, (value: any) => void>;
     private isInitialized: boolean = false;
+    private kafka: Kafka;
 
     private constructor() {
-        const kafka = new Kafka({
+        this.kafka = new Kafka({
             clientId: 'api-server',
-            brokers: ["localhost:9092"]
+            brokers: ["kafka:9092"]
         });
 
-        this.queue = createClient();
-        this.consumer = kafka.consumer({ groupId: 'api-server-group' });
+        this.queue = createClient({
+            socket: {
+                host: 'redis',
+                port: 6379,
+            },
+        });
+        this.consumer = this.kafka.consumer({ groupId: 'api-server-group' });
         this.messageHandlers = new Map();
     }
 
@@ -24,11 +30,14 @@ export class RedisKafkaManager {
         if (this.isInitialized) return;
 
         try {
-            await this.queue.connect();
+            if (!this.queue.isOpen) {
+                await this.queue.connect();
+            }
+
             await this.consumer.connect();
             await this.consumer.subscribe({
                 topic: 'responses',
-                fromBeginning: false
+                fromBeginning: false,
             });
 
             await this.consumer.run({
@@ -55,9 +64,11 @@ export class RedisKafkaManager {
             this.isInitialized = true;
         } catch (error) {
             console.error('Failed to initialize RedisKafkaManager:', error);
+            this.isInitialized = false;
             throw error;
         }
     }
+
 
     public static getInstance(): RedisKafkaManager {
         if (!RedisKafkaManager.instance) {
@@ -81,7 +92,7 @@ export class RedisKafkaManager {
                     this.messageHandlers.delete(correlationId);
                     reject(new Error(`Request timed out for ${request.type}`));
                 }
-            }, 120000);
+            }, 6000);
 
             this.messageHandlers.set(correlationId, (value) => {
                 clearTimeout(timeoutId);

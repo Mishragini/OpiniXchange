@@ -1,8 +1,8 @@
 'use client';
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { AuthContextType, useAuth } from "../../_components/AuthProvider";
 import { useCategory } from "../../_components/CategoryProvider";
-import { PlusCircle, Wallet, TrendingUp, Tag } from 'lucide-react';
+import { PlusCircle, Wallet, TrendingUp} from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

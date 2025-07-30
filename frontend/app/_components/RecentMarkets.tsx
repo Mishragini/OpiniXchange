@@ -1,6 +1,5 @@
 'use client'
 
-import { useCallback, useEffect, useState } from "react"
 import { MarketCard } from "./MarketCard"
 import { useMarket } from "./MarketsProvider"
 

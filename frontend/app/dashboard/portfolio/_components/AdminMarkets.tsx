@@ -29,7 +29,7 @@ export const AdminMarkets = () => {
     });
     const [isLoading, setIsLoading] = useState(false);
 
-    const AdminMarkets = markets?.filter(m => m.createdBy === user.id);
+    const AdminMarkets = markets?.filter(m => m.createdBy === user?.id);
 
     const handleMint = async (symbol: string) => {
         setIsLoading(true);

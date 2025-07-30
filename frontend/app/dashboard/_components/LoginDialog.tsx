@@ -5,7 +5,7 @@ interface FormErrors {
     password?: string;
 }
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -20,8 +20,10 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff } from "lucide-react"
 import { useAuth } from '../../_components/AuthProvider';
+import { useWebSocket } from './WebsocketProvider';
 
 export const LoginDialog: React.FC = () => {
+    const { isConnected, connect } = useWebSocket()
     const [open, setOpen] = useState<boolean>(false);
     const [email, setEmail] = useState<string>('');
     const [password, setPassword] = useState<string>('');
@@ -49,7 +51,7 @@ export const LoginDialog: React.FC = () => {
         if (!password) {
             newErrors.password = 'Password is required';
         }
-       
+
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -86,6 +88,9 @@ export const LoginDialog: React.FC = () => {
             }
 
             setUser(result.data.user);
+            if (!isConnected) {
+                connect()
+            }
             setBalance(result.data.user.balance.INR);
             setStocks(result.data.user.balance.stocks);
             setEmail('');

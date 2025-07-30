@@ -1,6 +1,6 @@
 'use client';
 import Image from "next/image"
-import { usePathname, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 
 export const Appbar = () => {
 

@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { useMarket } from "@/app/_components/MarketsProvider";
 import { useCategory } from "../../_components/CategoryProvider";
 import { MarketCard } from "@/app/_components/MarketCard";
-import Image from 'next/image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Empty } from '@/app/_components/Empty';
 

@@ -82,10 +82,6 @@ const MarketCard = ({ marketSymbol }: { marketSymbol: string }) => {
                 });
             }
 
-            console.log("topic", message.topic),
-                console.log("type", message.data.type)
-            console.log("marketSymbol", message.data?.marketSymbol)
-            console.log("trades", message.data.data.trades)
 
             if (
                 message.topic === 'market-updates' &&

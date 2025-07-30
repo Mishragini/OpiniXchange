@@ -59,6 +59,7 @@ const PlaceOrderCard = ({ lastYesPrice, lastNoPrice, marketSymbol }: { lastYesPr
                 description: result.data.message,
             });
         } catch (error) {
+            console.error(error)
             toast({
                 variant: "destructive",
                 title: "Could not place order.",

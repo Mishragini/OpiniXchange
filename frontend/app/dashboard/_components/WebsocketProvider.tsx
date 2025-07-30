@@ -24,7 +24,6 @@ interface WebSocketProviderProps {
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
     const wsRef = useRef<WebSocket | null>(null);
-    const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
     const { user } = useAuth()
 
     const connect = () => {
@@ -51,10 +50,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     };
 
     const disconnect = () => {
-        if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current);
-        }
-
         if (wsRef.current) {
             wsRef.current.close();
             wsRef.current = null;

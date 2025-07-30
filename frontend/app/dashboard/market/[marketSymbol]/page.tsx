@@ -30,7 +30,7 @@ export default function Page({ params }: {
     const resolvedParams = use(params);
     const { user } = useAuth();
     const { marketSymbol } = resolvedParams;
-    const { ws, isConnected, disconnect } = useWebSocket();
+    const { ws, isConnected } = useWebSocket();
     const [market, setMarket] = useState<Market | null>(null);
 
     const fetchMarket = useCallback(async () => {

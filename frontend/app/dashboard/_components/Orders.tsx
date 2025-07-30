@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { format } from 'date-fns';
 import { Empty } from "@/app/_components/Empty";
 import { Order, useOrders } from "../market/[marketSymbol]/_components/OrdersProvider";

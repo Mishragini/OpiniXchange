@@ -3,8 +3,13 @@ import { createClient } from "redis"
 import { Engine } from "./Engine"
 
 async function main() {
-    const queueClient = createClient()
-    
+    const queueClient = createClient({
+        socket: {
+            host: 'redis',
+            port: 6379,
+        },
+    });
+
     queueClient.on('error', (err) => {
         console.error('Redis Client Error:', err)
     })
@@ -12,14 +17,14 @@ async function main() {
     try {
         await queueClient.connect()
         console.log('Connected to Redis successfully')
-        
+
         while (true) {
             try {
                 const request = await queueClient.rPop('requests')
                 if (request) {
                     const parsedRequest = JSON.parse(request)
                     await Engine.getInstance().processReq(parsedRequest)
-                } 
+                }
             } catch (error) {
                 console.error('Error processing request:', error)
                 continue

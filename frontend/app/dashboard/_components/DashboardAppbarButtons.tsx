@@ -1,12 +1,13 @@
 'use client';
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../../_components/AuthProvider"
 import LoginDialog from "./LoginDialog";
 import SignupDialog from "./SignupDialog";
 import Image from "next/image";
-import { redirect, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import OnrampDialog from "./OnrampDailog";
 import { useToast } from "@/hooks/use-toast";
+import { useWebSocket } from "./WebsocketProvider";
 
 export const DashboardAppbarButtons = () => {
     const router = useRouter();
@@ -14,6 +15,7 @@ export const DashboardAppbarButtons = () => {
     const [mounted, setMounted] = useState(false);
     const [isOnrampDialogOpen, setIsOnrampDialogOpen] = useState(false);
     const { toast } = useToast();
+    const { disconnect } = useWebSocket();
 
     useEffect(() => {
         setMounted(true);
@@ -40,12 +42,15 @@ export const DashboardAppbarButtons = () => {
                 setUser(null);
                 setBalance({ available: 0, locked: 0 })
                 setStocks({})
+                disconnect()
+                router.push(`/dashboard`);
             }
         } catch (error) {
+            console.error(error)
             toast({
                 variant: "destructive",
                 title: "Logout failed",
-                description: "Could not log you out.",
+                description: error instanceof Error ? "error.message" : "Could not log you out.",
             });
         }
 

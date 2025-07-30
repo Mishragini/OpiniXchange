@@ -10,7 +10,7 @@ async function main() {
         const prisma = new PrismaClient();
         const kafka = new Kafka({
             clientId: "archiver",
-            brokers: ["localhost:9092"],
+            brokers: ["kafka:9092"],
         });
         const consumer: Consumer = kafka.consumer({ groupId: "archiver-group" });
 

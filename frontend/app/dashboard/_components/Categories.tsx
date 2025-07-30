@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from "react"
 import { useCategory } from "../../_components/CategoryProvider";
 
 
@@ -23,7 +22,7 @@ export const Category = () => {
             >
                 <span>All Events</span>
             </div>
-            {categories?.map((category, index) => (
+            {categories?.map((category) => (
                 <div
                     key={category.id}
                     onClick={() => setActiveCategory(category.title)}

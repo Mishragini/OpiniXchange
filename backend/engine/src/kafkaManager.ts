@@ -12,7 +12,7 @@ export class KafkaManager {
     private constructor() {
         const kafka = new Kafka({
             clientId: "engine",
-            brokers: ["localhost:9092"]
+            brokers: ["kafka:9092"]
         });
 
         this.producer = kafka.producer();
