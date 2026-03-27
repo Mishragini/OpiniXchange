@@ -7,3 +7,5 @@
 🚧 **In Progress** 🚧
 
 OpiniXchange is currently under active development. Key features, interfaces, and functionalities are being implemented and refined. Stay tuned for updates as the project evolves!
+
+TODO: add docker and deploy
